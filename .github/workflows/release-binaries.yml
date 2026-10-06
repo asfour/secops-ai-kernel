@@ -1,0 +1,36 @@
+name: "SecOps Kernel Artifact Release"
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release-artifacts:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "Install System Toolchains"
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang llvm libelf-dev protobuf-compiler
+
+      - name: "Compile Ring-0 eBPF Bytecode"
+        run: |
+          clang -O2 -target bpf -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
+
+      - name: "Bundle Release Assets"
+        run: |
+          mkdir -p release-bundle
+          cp pkg/kernel/ebpf/monitor.o release-bundle/
+          cp configs/secops-kernel.yaml release-bundle/
+          tar -czvf secops-kernel-core-assets.tar.gz -C release-bundle .
+
+      - name: "Publish Assets to GitHub Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          files: secops-kernel-core-assets.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
