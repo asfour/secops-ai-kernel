@@ -13,25 +13,42 @@ jobs:
       - name: "Checkout Repository"
         uses: actions/checkout@v4
 
+      - name: "Install System Dependencies and Toolchains"
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y protobuf-compiler z3 build-essential
+
+      - name: "Install Go and Compilers"
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: "Validate gRPC Protocol Schemas"
         run: |
-          sudo apt-get install -y protobuf-compiler
+          # Download and install specific target Go protobuf extensions
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          # Force export the Go bin pathway directly into this active step runner context
+          
+          # Force export the Go bin pathway directly into this step context
           export GOPATH=$(go env GOPATH)
           export PATH=$PATH:$GOPATH/bin
-          protoc -I=pkg/api/v2/ --go_out=paths=source_relative:pkg/api/v2/ --go-grpc_out=paths=source_relative:pkg/api/v2/ pkg/api/v2/secops_kernel.proto
+          
+          # Compile stubs and confirm syntax safety
+          protoc -I=pkg/api/v2/ \
+            --go_out=paths=source_relative:pkg/api/v2/ \
+            --go-grpc_out=paths=source_relative:pkg/api/v2/ \
+            pkg/api/v2/secops_kernel.proto
 
-      - name: "Set up Dafny and Z3 Solver"
-        uses: dafny-lang/setup-dafny@v1
-        with:
-          dafny-version: '4.11.0'
+      - name: "Install Dafny via Dotnet CLI"
+        run: |
+          dotnet tool install -g dafny
+          # Inject the global dotnet tools directory directly into the systemic GitHub Path matrix
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: "Verify Formal Dafny Invariants"
         run: |
-          # Use the modern CLI verification command syntax
-          dafny verify pkg/verify/dafny/intent_rules.dfy
+          # Execute formal validation passing explicit link mappings to the local Z3 bin binary 
+          dafny verify --solver-path=/usr/bin/z3 pkg/verify/dafny/intent_rules.dfy
 
       - name: "Compile and Link System Sandbox Hooks"
         run: |
