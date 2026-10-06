@@ -52,6 +52,8 @@ jobs:
 
       - name: "Compile and Link System Sandbox Hooks"
         run: |
+          # Enforce module synchronization before compilation
+          go mod tidy
           go build ./pkg/sandbox/firecracker/...
 
       - name: "Generate Cryptographic Compliance Attestation Block"
