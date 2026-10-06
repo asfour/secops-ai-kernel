@@ -29,10 +29,14 @@ if [ ! -c /dev/kvm ]; then
 fi
 sudo chmod +x /dev/kvm
 
+# Locate Step 4 inside setup.sh and make sure it matches this explicit declaration:
 echo "Compiling Pure Machine Protobuf Core buffers..."
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-export PATH="$PATH:\$(go env GOPATH)/bin"
+
+# Add these lines to explicitly hook the environment profile variables
+export GOPATH="$(go env GOPATH)"
+export PATH="$PATH:$GOPATH/bin"
 
 protoc -I=pkg/api/v2/ \
   --go_out=paths=source_relative:pkg/api/v2/ \
