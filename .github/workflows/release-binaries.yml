@@ -31,7 +31,7 @@ jobs:
           tar -czvf secops-kernel-core-assets.tar.gz -C release-bundle .
 
       - name: "Publish Assets to GitHub Release"
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: secops-kernel-core-assets.tar.gz
         env:
