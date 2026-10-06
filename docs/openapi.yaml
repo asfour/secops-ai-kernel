@@ -1,0 +1,70 @@
+openapi: 3.0.3
+info:
+  title: SecOps Kernel Machine Interface
+  description: Headless gRPC-gated operating system engine offering hypervisor-level sandboxing and Ring-0 eBPF syscall memory-fencing.
+  version: 2.0.0-Machine
+servers:
+  - url: https://secops-kernel.io
+paths:
+  /secops.kernel.v2.ZKIntentCompiler/CompileZKIntent:
+    post:
+      summary: Compile and authorize agent intent graph
+      description: Compiles an autonomous agent's natural-language tool parameters into a verified cryptographic graph vector.
+      operationId: CompileZKIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompileZKIntentRequest'
+      responses:
+        '200':
+          description: Intent evaluated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileZKIntentResponse'
+components:
+  schemas:
+    CompileZKIntentRequest:
+      type: object
+      required:
+        - agent_id
+        - auth_token_hash
+        - execution_intent_graph
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        auth_token_hash:
+          type: string
+          format: byte
+          description: SHA-256 hash representation of the session key.
+        execution_intent_graph:
+          type: object
+          properties:
+            nodes:
+              type: array
+              items:
+                type: object
+                properties:
+                  node_id:
+                    type: string
+                  action_directive:
+                    type: string
+                  target_resource_urn:
+                    type: string
+    CompileZKIntentResponse:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum: [VERDICT_UNKNOWN, VERDICT_0x01_PASS, VERDICT_0x00_ABORT, VERDICT_0x00_PURGE_AND_MUTATE]
+        zk_proof_payload_bytes:
+          type: string
+          format: byte
+        simulation_token:
+          type: string
+        compilation_timestamp_ns:
+          type: integer
+          format: int64
