@@ -19,7 +19,9 @@ jobs:
 
       - name: "Compile Ring-0 eBPF Bytecode"
         run: |
-          clang -O2 -target bpf -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
+          clang -O2 -target bpf \
+            -I/usr/include/x86_64-linux-gnu \
+            -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
 
       - name: "Bundle Release Assets"
         run: |
