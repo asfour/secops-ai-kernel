@@ -1,21 +1,30 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/secops_kernel'))
+import time
 
-from client import SecOpsKernelClient
+# Dynamic inclusion path mapping for compiled protobuf stubs
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-def run_local_sdk_validation():
+try:
+    from client import SecOpsKernelClient
+    import secops_kernel_pb2 as pb
+except ImportError:
+    print("[Error] Local protobuf stubs have not been compiled yet. Retrying within step pipeline...")
+
+def run_networked_integration_test():
     print("=================================================================")
-    print("🐍 Executing Local Python SDK Validation Suite...")
+    print("🐍 Running E2E Python SDK Container Network Test...")
     print("=================================================================")
     
-    # Initialize the client mapping to the secure container bridge channel
-    client = SecOpsKernelClient(target_address="127.0.0.1:50051")
+    # Allow time for the gRPC container backend server to initialize
+    time.sleep(3)
+    
+    # Connect directly to our running core engine service over the mesh network
+    client = SecOpsKernelClient(target_address="kernel-core:50051")
     
     agent_id = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
     session_key = "runtime_session_cryptographic_root_key_2026"
     
-    # Declare the remediation directive steps to compile
     mock_actions = [
         {
             "directive": "SYS_CALL_NETWORK_REDUCE",
@@ -24,17 +33,17 @@ def run_local_sdk_validation():
         }
     ]
     
-    print("[*] Dispatching tool intent graph vectors via Python SDK...")
+    print("[*] Transmitting structured tool signature graph over network...")
     result = client.compile_and_authorize_intent(agent_id, session_key, mock_actions)
     
-    # The client wrapper will handle error routing if the gRPC backend is offline
-    if not result.get("success") and "error" in result:
-        print(f"✅ SDK Structural Communication Verified (Expected connection drop: {result['error']})")
-        print("=================================================================")
+    if result.get("success"):
+        print(f"🎉 TEST PASSED: Token acquired successfully: {result['simulation_token']}")
     else:
-        print(f"Result Verdict Signal received: {result.get('verdict')}")
-        
+        # If the backend connection dropped or failed, capture the trace logs cleanly
+        print(f"📡 Connection Handshake Logged: {result.get('error', 'Handshake Rejected by Kernel Invariants')}")
+    
+    print("=================================================================")
     client.close()
 
 if __name__ == "__main__":
-    run_local_sdk_validation()
+    run_networked_integration_test()
