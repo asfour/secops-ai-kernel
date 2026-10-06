@@ -1,0 +1,24 @@
+# Core Platform System Binary Outputs
+*.o
+*.so
+*.a
+pkg/api/v2/secops_kernel.pb.go
+
+# Go Runtime Artifacts
+bin/
+pkg/agent/agent_worker
+pkg/sandbox/firecracker/orchestrator_test
+
+# Firecracker & gVisor Host Ephemeral Assets
+*.sock
+*.socket
+/tmp/firecracker-*
+configs/running-state.json
+
+# Rust Benchmark & Cargo Build Outputs
+/target/
+Cargo.lock
+
+# Operating System Noise
+.DS_Store
+.thumbs/
