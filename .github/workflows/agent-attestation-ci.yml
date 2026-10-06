@@ -21,7 +21,7 @@ jobs:
       - name: "Install Go and Compilers"
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: "Validate gRPC Protocol Schemas"
         run: |
