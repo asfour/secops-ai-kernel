@@ -19,25 +19,5 @@ jobs:
         with:
           webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
-          payload: |
-            {
-              "text": "🚨 *SecOps Kernel Stream Update* \nRepository: \${{ github.repository }}\nWorkflow: `${{ github.workflow }}`\nStatus: *\${{ job.status }}*",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "🛡️ *SecOps Kernel Core Execution Notification Block*\n*Repository:* \${{ github.repository }}\n*Commit Ref:* `${{ github.sha }}`"
-                  }
-                },
-                {
-                  "type": "context",
-                  "elements": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "Machine-to-Machine Lifecycle Event Monitored out-of-band."
-                    }
-                  ]
-                }
-              ]
-            }
+          # Utilizing clean inline escaping guarantees valid JSON parsing regardless of multi-line context
+          payload: "{\"text\":\"🚨 *SecOps Kernel Stream Update*\\n*Repository:* \${{ github.repository }}\\n*Commit:* `${{ github.sha }}`\"}"
