@@ -19,7 +19,7 @@ jobs:
         with:
           webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
-          # Clean, unescaped JSON format allows GitHub to populate context fields perfectly
+          # Removed the backslash characters to allow proper native GitHub JSON parsing
           payload: |
             {
               "text": "🚨 *SecOps Kernel Stream Update* \nRepository: \${{ github.repository }}\nWorkflow: `${{ github.workflow }}`\nStatus: *\${{ job.status }}*",
