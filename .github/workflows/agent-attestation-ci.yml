@@ -13,18 +13,47 @@ jobs:
       - name: "Checkout Repository"
         uses: actions/checkout@v4
 
+      - name: "Install System Dependencies and Toolchains"
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y protobuf-compiler z3 build-essential
+
+      - name: "Install Go and Compilers"
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: "Validate gRPC Protocol Schemas"
         run: |
-          sudo apt-get install -y protobuf-compiler
-          protoc -I=pkg/api/v2/ --go_out=paths=source_relative:pkg/api/v2/ pkg/api/v2/secops_kernel.proto
+          # Download and install specific target Go protobuf extensions
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          
+          # Force export the Go bin pathway directly into this step context
+          export GOPATH=$(go env GOPATH)
+          export PATH=$PATH:$GOPATH/bin
+          
+          # Compile stubs and confirm syntax safety
+          protoc -I=pkg/api/v2/ \
+            --go_out=paths=source_relative:pkg/api/v2/ \
+            --go-grpc_out=paths=source_relative:pkg/api/v2/ \
+            pkg/api/v2/secops_kernel.proto
+
+      - name: "Install Dafny via Dotnet CLI"
+        run: |
+          dotnet tool install -g dafny
+          # Inject the global dotnet tools directory directly into the systemic GitHub Path matrix
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: "Verify Formal Dafny Invariants"
         run: |
-          dotnet tool install -g dafny
-          dafny /compile:0 pkg/verify/dafny/intent_rules.dfy
+          # Execute formal validation passing explicit link mappings to the local Z3 bin binary 
+          dafny verify --solver-path=/usr/bin/z3 pkg/verify/dafny/intent_rules.dfy
 
       - name: "Compile and Link System Sandbox Hooks"
         run: |
+          # Enforce module synchronization before compilation
+          go mod tidy
           go build ./pkg/sandbox/firecracker/...
 
       - name: "Generate Cryptographic Compliance Attestation Block"

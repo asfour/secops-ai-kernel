@@ -1,3 +1,5 @@
+// pkg/verify/dafny/intent_rules.dfy
+
 datatype Verdict = VERDICT_PASS | VERDICT_ABORT
 
 datatype ActionNode = ActionNode(id: int, targetSubnet: int, writePrivilege: bool)
@@ -20,7 +22,7 @@ method CompileIntentNode(node: ActionNode) returns (v: Verdict)
   }
 }
 
-method VerifyGraphArray(graph: array<ActionNode>) returns (v: Verdict)
+method VerifyGraphArray(graph: array?<ActionNode>) returns (v: Verdict)
   requires graph != null
   ensures v == VERDICT_PASS ==> forall i :: 0 <= i < graph.Length ==> SystemInvariant(graph[i])
 {

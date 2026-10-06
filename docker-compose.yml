@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  kernel-core:
+    image: golang:1.22-bookworm
+    container_name: secops-kernel-core
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    security_opt:
+      - apparmor:unconfined
+    cap_add:
+      - SYS_ADMIN # Required to attach low-level eBPF monitoring bytecode hooks
+    devices:
+      - "/dev/kvm:/dev/kvm" # Pass-through nested virtualization boundaries safely
+    ports:
+      - "50051:50051"
+    environment:
+      - GOPATH=/go
+    command: >
+      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev z3 &&
+      export PATH=$$PATH:$$(go env GOPATH)/bin &&
+      go run pkg/agent/remediation_worker.go"
+    networks:
+      - secops-m2m-mesh
+
+  sidechannel-telemetry:
+    image: alpine:latest
+    container_name: secops-telemetry-sink
+    command: >
+      sh -c "echo 'Telemetry processing stream initialized. Listening on sidechannel matrices...'; while true; do sleep 3600; done"
+    networks:
+      - secops-m2m-mesh
+
+networks:
+  secops-m2m-mesh:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.99.0/24
