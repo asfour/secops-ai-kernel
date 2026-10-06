@@ -1,0 +1,55 @@
+name: "SecOps Kernel Operations Notification Bridge"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_run:
+    workflows: ["SecOps Kernel Machine Attestation CI"]
+    types: [completed]
+
+jobs:
+  dispatch-slack-payload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Evaluate Workflow Invariants"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            if (!webhookUrl) {
+              console.log("Slack Notification Token not configured. Bypassing stream.");
+              return;
+            }
+        env:
+          SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: "Stream Channel Frame Payload"
+        if: always()
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: webhook-trigger
+          payload: |
+            {
+              "text": "🚨 *SecOps Kernel Stream Update* \nRepository: \${{ github.repository }}\nWorkflow: `${{ github.workflow }}`\nStatus: *\${{ job.status }}*",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "🛡️ *SecOps Kernel Core Execution Notification Block*\n*Repository:* \${{ github.repository }}\n*Commit Ref:* `${{ github.sha }}`"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Machine-to-Machine Lifecycle Event Monitored out-of-band."
+                    }
+                  ]
+                }
+              ]
+            }
