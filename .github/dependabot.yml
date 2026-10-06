@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Monitor Go package ecosystems (gRPC, Protobuf specs)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Track Rust Criterion performance validation dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Secure Docker Compose staging sandbox containers
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+  # Keep GitHub Action test runners secure
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
