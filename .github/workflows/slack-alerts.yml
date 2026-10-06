@@ -13,24 +13,13 @@ jobs:
   dispatch-slack-payload:
     runs-on: ubuntu-latest
     steps:
-      - name: "Evaluate Workflow Invariants"
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-            if (!webhookUrl) {
-              console.log("Slack Notification Token not configured. Bypassing stream.");
-              return;
-            }
-        env:
-          SLACK_WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
-
       - name: "Stream Channel Frame Payload"
         if: always()
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
+          # Clean, unescaped JSON format allows GitHub to populate context fields perfectly
           payload: |
             {
               "text": "🚨 *SecOps Kernel Stream Update* \nRepository: \${{ github.repository }}\nWorkflow: `${{ github.workflow }}`\nStatus: *\${{ job.status }}*",
