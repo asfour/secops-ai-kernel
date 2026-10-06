@@ -59,7 +59,9 @@ protoc -I=pkg/api/v2/ \
 
 # 6. Compile Ring-0 Kernel Monitor via Clang Bytecode BPF Toolchain
 echo "Building Ring-0 System Call Interception Blocks (eBPF)..."
-clang -O2 -target bpf -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
+clang -O2 -target bpf \
+  -I/usr/include/x86_64-linux-gnu \
+  -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
 
 echo "================================================================="
 echo "✅ SecOps Kernel v2.0 Setup Complete. Ready for Headless Ingestion."

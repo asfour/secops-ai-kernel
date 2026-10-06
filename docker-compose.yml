@@ -18,8 +18,9 @@ services:
     environment:
       - GOPATH=/go
     command: >
-      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev z3 &&
+      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev gcc-multilib z3 &&
       export PATH=$$PATH:$$(go env GOPATH)/bin &&
+      clang -O2 -target bpf -I/usr/include/x86_64-linux-gnu -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o &&
       go run pkg/agent/remediation_worker.go"
     networks:
       - secops-m2m-mesh
