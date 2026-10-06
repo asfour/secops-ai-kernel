@@ -1,0 +1,36 @@
+{
+  "mcpId": "secops-kernel-governor",
+  "name": "SecOps Kernel OS Safety Enclave",
+  "version": "2.0.0",
+  "description": "Headless low-level operating system engine providing hypervisor isolation and eBPF memory fencing for high-privilege agent tools.",
+  "transport": {
+    "type": "grpc",
+    "endpoint": "grpc://127.0.0.1:50051"
+  },
+  "capabilities": {
+    "tools": [
+      {
+        "name": "compile_zk_intent",
+        "description": "Compiles a planned sequence of high-privilege infrastructure changes into a mathematical graph for safety verification before execution.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "agent_id": {"type": "string", "format": "uuid"},
+            "session_key": {"type": "string"},
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "directive": {"type": "string"},
+                  "target_urn": {"type": "string"}
+                }
+              }
+            }
+          },
+          "required": ["agent_id", "session_key", "actions"]
+        }
+      }
+    ]
+  }
+}
