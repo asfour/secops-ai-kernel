@@ -23,10 +23,15 @@ jobs:
           export PATH=$PATH:$GOPATH/bin
           protoc -I=pkg/api/v2/ --go_out=paths=source_relative:pkg/api/v2/ --go-grpc_out=paths=source_relative:pkg/api/v2/ pkg/api/v2/secops_kernel.proto
 
+      - name: "Set up Dafny and Z3 Solver"
+        uses: dafny-lang/setup-dafny@v1
+        with:
+          dafny-version: '4.11.0'
+
       - name: "Verify Formal Dafny Invariants"
         run: |
-          dotnet tool install -g dafny
-          dafny /compile:0 pkg/verify/dafny/intent_rules.dfy
+          # Use the modern CLI verification command syntax
+          dafny verify pkg/verify/dafny/intent_rules.dfy
 
       - name: "Compile and Link System Sandbox Hooks"
         run: |
