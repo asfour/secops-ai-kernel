@@ -1,0 +1,42 @@
+name: "Compile Performance Benchmarks to Documentation"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'benches/**'
+      - 'pkg/sandbox/firecracker/**'
+
+permissions:
+  contents: write
+
+jobs:
+  run-and-publish-benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Codebase"
+        uses: actions/checkout@v4
+
+      - name: "Install System Toolchains and Dependencies"
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential protobuf-compiler libelf-dev z3
+
+      - name: "Configure Rust Stable Matrix"
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: "Execute Criterion Sub-Millisecond Analysis Suite"
+        run: |
+          # Generate structured HTML analysis performance data loops
+          cargo bench --bench kernel_performance_tests
+
+      - name: "Inject Analytics Layer into Technical Site Documentation"
+        run: |
+          mkdir -p docs/perf-analytics
+          cp -r target/criterion/ docs/perf-analytics/report/
+
+      - name: "Publish Performance Charts to GitHub Pages"
+        run: |
+          pip install --no-cache-dir mkdocs-material
+          mkdocs gh-deploy --force
