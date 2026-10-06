@@ -1,0 +1,34 @@
+name: "Deploy Technical Documentation Portal"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/deploy-docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy-site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
+
+      - name: "Configure Python Runtime Environment"
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: "Install MkDocs Toolchain Dependencies"
+        run: |
+          pip install --no-cache-dir mkdocs-material
+
+      - name: "Compile and Publish to GitHub Pages"
+        run: |
+          # Gh-deploy automatically compiles static layers and force-pushes them to a clean gh-pages branch
+          mkdocs gh-deploy --force
