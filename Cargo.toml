@@ -1,0 +1,11 @@
+[package]
+name = "secops_kernel_benchmarks"
+version = "2.0.0"
+edition = "2021"
+
+[[bench]]
+name = "kernel_performance_tests"
+harness = false
+
+[dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }

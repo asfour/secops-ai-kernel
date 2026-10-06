@@ -1,0 +1,25 @@
+version: "v2.0.0-machine"
+metadata:
+  cluster_identity: "secops-isolated-core-01"
+  security_clearance_floor: "L3_AUTONOMOUS_TEST"
+
+engine:
+  runtime: "firecracker-kvm"
+  max_execution_window_ms: 500
+  memory_fence_bytes: 536870912 
+
+taint_tracking:
+  propagate_llm_outputs: true
+  enforced_modes:
+    - "DENY_RAW_SHELL_EXECUTION"
+    - "ENFORCE_HEX_ENCODED_STREAM"
+
+cryptography:
+  token_ttl_ms: 10
+  attestation_mode: "AMD_SEV_SNP_REQUIRED"
+  zk_circuit_path: "/pkg/verify/dafny/compiled_circuit.bin"
+
+fail_safe:
+  on_non_determinism: "0x00_ABORT"
+  on_timeout: "0x00_PURGE_AND_MUTATE"
+  telemetry_stream: "grpc://10.0.99.250:50051"

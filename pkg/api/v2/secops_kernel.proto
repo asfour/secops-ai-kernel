@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package secops.kernel.v2;
+
+option go_package = "pkg/api/v2;secops_kernel";
+
+enum ExecutionVerdict {
+  VERDICT_UNKNOWN = 0;
+  VERDICT_0x01_PASS = 1;
+  VERDICT_0x00_ABORT = 2;
+  VERDICT_0x00_PURGE_AND_MUTATE = 3;
+}
+
+message IntentNode {
+  string node_id = 1;
+  string action_directive = 2;
+  string target_resource_urn = 3;
+  bytes argument_payload_bytes = 4;
+}
+
+message IntentEdge {
+  string from_node_id = 1;
+  string to_node_id = 2;
+  string conditional_trigger = 3;
+}
+
+message IntentGraph {
+  repeated IntentNode nodes = 1;
+  repeated IntentEdge edges = 2;
+}
+
+message CompileZKIntentRequest {
+  string agent_id = 1;
+  bytes auth_token_hash = 2;
+  IntentGraph execution_intent_graph = 3;
+  uint64 max_allowed_latency_ms = 4;
+}
+
+message CompileZKIntentResponse {
+  ExecutionVerdict verdict = 1;
+  bytes zk_proof_payload_bytes = 2;
+  string simulation_token = 3;
+  int64 compilation_timestamp_ns = 4;
+}
+
+message ForkVerifyRequest {
+  string simulation_token = 1;
+  string target_environment_vector = 2;
+  bytes payload_binary_stream = 3;
+}
+
+message StateDiffMetrics {
+  uint64 files_mutated = 1;
+  uint64 memory_drift_bytes = 2;
+  uint64 network_packets_dropped = 3;
+  bytes system_call_entropy_hash = 4;
+}
+
+message ForkVerifyResponse {
+  string microvm_id = 1;
+  StateDiffMetrics diff_metrics = 2;
+  ExecutionVerdict verdict = 3;
+  bytes commit_ready_hash = 4;
+}
+
+message TelemetryFrame {
+  uint64 sequence_id = 1;
+  int64 timestamp_ns = 2;
+  string agent_id = 3;
+  string active_microvm_id = 4;
+  uint64 cpu_instruction_count = 5;
+  uint32 cache_miss_delta = 6;
+  bytes raw_syscall_bytes = 7;
+}
+
+message TelemetryAcknowledgement {
+  uint64 received_sequence_id = 1;
+  bool processing_stable = 2;
+}
+
+service ZKIntentCompiler {
+  rpc CompileZKIntent(CompileZKIntentRequest) returns (CompileZKIntentResponse);
+}
+
+service ForkVerifyEngine {
+  rpc ExecuteForkVerify(ForkVerifyRequest) returns (stream ForkVerifyResponse);
+}
+
+service TelemetryStreamer {
+  rpc StreamSideChannel(stream TelemetryFrame) returns (TelemetryAcknowledgement);
+}

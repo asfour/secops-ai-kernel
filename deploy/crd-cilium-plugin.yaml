@@ -1,0 +1,52 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agentruntimesecurities.secops.kernel.io
+spec:
+  group: secops.kernel.io
+  versions:
+    - name: v2alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                agentUuid:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                autonomyLevelFloor:
+                  type: string
+                  enum: ["L1_SHADOW", "L2_CONDITIONAL", "L3_SIMULATED", "L4_ATOMIC", "L5_MUTABLE"]
+                ciliumNetworkPolicyBinding:
+                  type: string
+                sandboxProfile:
+                  type: string
+                  enum: ["gvisor-kvm", "firecracker-microvm"]
+                memoryCeilingBytes:
+                  type: integer
+                maxSystemExecutionMs:
+                  type: integer
+  scope: Namespaced
+  names:
+    plural: agentruntimesecurities
+    singular: agentruntimesecurity
+    kind: AgentRuntimeSecurity
+    shortNames:
+      - ars
+---
+apiVersion: secops.kernel.io/v2alpha1
+kind: AgentRuntimeSecurity
+metadata:
+  name: threat-hunter-daemon-policy
+  namespace: secops-agents-prod
+spec:
+  agentUuid: "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+  autonomyLevelFloor: "L4_ATOMIC"
+  ciliumNetworkPolicyBinding: "secops-egress-lockdown-policy"
+  sandboxProfile: "firecracker-microvm"
+  memoryCeilingBytes: 536870912
+  maxSystemExecutionMs: 500
