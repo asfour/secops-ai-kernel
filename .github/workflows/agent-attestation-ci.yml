@@ -19,7 +19,7 @@ jobs:
           sudo apt-get install -y protobuf-compiler z3 build-essential
 
       - name: "Install Go and Compilers"
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.25'
 
