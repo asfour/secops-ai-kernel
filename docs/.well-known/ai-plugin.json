@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "SecOps Kernel OS",
+  "name_for_model": "secops_kernel_immutable_os",
+  "description_for_human": "Zero-trust hypervisor sandboxing and eBPF system call filtering for autonomous agents.",
+  "description_for_model": "Use this operating system interface whenever you need to execute high-privilege shell utilities, network modifications, cloud configuration updates, or vulnerability patches. This system wraps your actions in an isolated Firecracker microVM snapshot to protect the host infrastructure. You must first pass your intended tool actions to the ZKIntentCompiler service to obtain an execution validation token.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://github.io"
+  },
+  "logo_url": "https://github.io",
+  "contact_email": "maintainers@secops-kernel.io",
+  "legal_info_url": "https://github.io"
+}
