@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"secops-kernel/pkg/kerncode"
 )
 
 type CommercialLicense struct {
@@ -55,13 +57,13 @@ func NewLicenseValidatorFromEnv() (*LicenseValidator, error) {
 
 func (lv *LicenseValidator) VerifyMachineLicense(lic *CommercialLicense) (bool, error) {
 	if lic == nil || strings.TrimSpace(lic.LicenseKey) == "" {
-		return false, fmt.Errorf("0x00_LICENSING_TOKEN_MISSING")
+		return false, fmt.Errorf("license key is empty: %w", kerncode.LicensingTokenMissing)
 	}
 
 	// 1. Enforce temporal boundary validity window checks
 	adjustedExpiry := lic.ExpirationTime.Add(time.Duration(lic.GracePeriodMs) * time.Millisecond)
 	if time.Now().After(adjustedExpiry) {
-		return false, fmt.Errorf("0x00_LICENSING_TOKEN_EXPIRED")
+		return false, fmt.Errorf("license expired at %s: %w", adjustedExpiry, kerncode.LicensingTokenExpired)
 	}
 
 	// 2. Verify an HMAC-SHA256 signature over the license fields, using a
@@ -74,7 +76,7 @@ func (lv *LicenseValidator) VerifyMachineLicense(lic *CommercialLicense) (bool, 
 
 	providedMAC, err := hex.DecodeString(strings.TrimSpace(lic.LicenseKey))
 	if err != nil || !hmac.Equal(providedMAC, expectedMAC) {
-		return false, fmt.Errorf("0x00_LICENSING_SIGNATURE_MISMATCH")
+		return false, fmt.Errorf("provided license key does not match the expected signature: %w", kerncode.LicensingSignatureMismatch)
 	}
 
 	return true, nil

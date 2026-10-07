@@ -1,18 +1,50 @@
 version: "3.8"
 
+# Two profiles, chosen by how much host privilege you're willing to grant:
+#
+#   docker-compose up kernel-core-dev
+#     Default local testbed: compiles the Go module and runs the unit test
+#     suite. No elevated capabilities, no device passthrough. This is
+#     sufficient for iterating on everything except the Firecracker/eBPF
+#     integration itself.
+#
+#   docker-compose --profile microvm up kernel-core-microvm
+#     Opt-in only: grants SYS_ADMIN, disables apparmor confinement, and
+#     passes through /dev/kvm so the container can actually load eBPF
+#     programs and boot Firecracker microVMs. Previously these privileges
+#     were granted unconditionally just to run `go test`, which doesn't
+#     need any of them (docs/improvement_spec.md item #10).
 services:
-  kernel-core:
+  kernel-core-dev:
     image: golang:1.25-bookworm
-    container_name: secops-kernel-core
+    container_name: secops-kernel-core-dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    ports:
+      - "50051:50051"
+    environment:
+      - GOPATH=/go
+    command: >
+      bash -c "go build ./... &&
+      go test -v ./..."
+    networks:
+      - secops-m2m-mesh
+
+  kernel-core-microvm:
+    image: golang:1.25-bookworm
+    container_name: secops-kernel-core-microvm
+    profiles:
+      - microvm
     volumes:
       - .:/workspace
     working_dir: /workspace
     security_opt:
       - apparmor:unconfined
     cap_add:
-      - SYS_ADMIN # Enforces necessary privileges to inject Ring-0 eBPF telemetry hooks
+      - SYS_ADMIN # Required to load eBPF programs and manage Firecracker microVMs.
     devices:
-      - "/dev/kvm:/dev/kvm" # Safely maps physical hardware virtualization pathways
+      - "/dev/kvm:/dev/kvm" # Required for Firecracker's nested virtualization.
     ports:
       - "50051:50051"
     environment:
@@ -22,7 +54,7 @@ services:
       export PATH=$$PATH:$$(go env GOPATH)/bin &&
       ./setup.sh &&
       go test -v ./pkg/sandbox/firecracker/... &&
-      go run pkg/agent/remediation_worker.go"
+      go run ./cmd/kernel-server"
     networks:
       - secops-m2m-mesh
 
