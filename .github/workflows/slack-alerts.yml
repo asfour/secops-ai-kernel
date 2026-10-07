@@ -15,14 +15,19 @@ jobs:
     steps:
       - name: "Post Status Packet via Native Curl Stream"
         if: always()
+        # Bind the GitHub context strings cleanly out-of-band to environment parameters
+        env:
+          WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO_NAME: \${{ github.repository }}
+          WORKFLOW_NAME: \${{ github.workflow }}
+          JOB_STATUS: \${{ job.status }}
         run: |
-          # Verify that the operational webhook token is configured on the host
-          if [ -z "\${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+          # Safe, flat shell code with zero inner interpolation faults
+          if [ -z "\$WEBHOOK_URL" ]; then
             echo "Slack notification webhook is unassigned. Bypassing stream pipeline."
             exit 0
           fi
 
-          # Stream a natively escaped, single-line valid JSON object directly to the API
           curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚨 *SecOps Kernel Operations Alert*\\n*Repository:* \${{ github.repository }}\\n*Workflow Match:* \`${{ github.workflow }}\`\\n*Execution Status:* **\${{ job.status }}**\"}" \
-            "\${{ secrets.SLACK_WEBHOOK_URL }}"
+            --data "{\"text\":\"🚨 *SecOps Kernel Operations Alert*\\n*Repository:* \$REPO_NAME\\n*Workflow:* \`$WORKFLOW_NAME\`\\n*Execution Status:* **\$JOB_STATUS**\"}" \
+            "\$WEBHOOK_URL"
