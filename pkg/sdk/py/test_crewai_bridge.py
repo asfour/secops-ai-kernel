@@ -5,6 +5,12 @@ import sys
 
 # Ensure local path references align cleanly
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
+# crewai_bridge instantiates SecOpsKernelClient at import time, which now
+# requires either mTLS certs or an explicit insecure opt-in (see
+# docs/improvement_spec.md item #7). This test suite mocks the client
+# entirely, so an unauthenticated channel is acceptable here.
+os.environ.setdefault("SECOPS_ALLOW_INSECURE_KERNEL_CLIENT", "true")
 import crewai_bridge
 
 class TestCrewAIIntegrationBridge(unittest.TestCase):

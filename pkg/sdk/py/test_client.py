@@ -16,8 +16,12 @@ def run_networked_integration_test():
     print("🐍 Running Hardened Python SDK Verification Suite...")
     print("=================================================================")
     
-    # Connect directly to our running core engine service over the mesh network
-    client = SecOpsKernelClient(target_address="kernel-core:50051")
+    # Connect directly to our running core engine service over the mesh network.
+    # This is a manual local-integration harness run inside the docker-compose
+    # mesh network (not CI), so an explicit insecure opt-in is acceptable here;
+    # see docs/improvement_spec.md item #7 for why SecOpsKernelClient otherwise
+    # requires mTLS certificates by default.
+    client = SecOpsKernelClient(target_address="kernel-core:50051", insecure=True)
     
     agent_id = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
     session_key = "runtime_session_cryptographic_root_key_2026"

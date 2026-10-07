@@ -11,7 +11,11 @@ from client import SecOpsKernelClient
 # 1. Initialize the Secure Kernel SDK connection
 # Points to our docker mesh kernel-core endpoint
 KERNEL_ADDRESS = os.getenv("SECOPS_KERNEL_ADDRESS", "127.0.0.1:50051")
-kernel_client = SecOpsKernelClient(target_address=KERNEL_ADDRESS)
+# mTLS is required unless SECOPS_SERVER_CA_CERT/SECOPS_CLIENT_KEY/SECOPS_CLIENT_CERT
+# are set (see secops_kernel/client.py), or the operator explicitly opts out of
+# transport security for local development via SECOPS_ALLOW_INSECURE_KERNEL_CLIENT.
+_ALLOW_INSECURE = os.getenv("SECOPS_ALLOW_INSECURE_KERNEL_CLIENT", "").lower() == "true"
+kernel_client = SecOpsKernelClient(target_address=KERNEL_ADDRESS, insecure=_ALLOW_INSECURE)
 
 @tool("Secure Network Mitigation Tool")
 def secure_network_mitigation_tool(target_subnet: str) -> str:
