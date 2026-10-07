@@ -18,7 +18,8 @@ jobs:
       - name: "Install System Toolchains"
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y clang llvm libelf-dev protobuf-compiler z3
+          # Added libbpf-dev explicitly to ensure bpf/bpf_helpers.h exists on host disk
+          sudo apt-get install -y clang llvm libelf-dev libbpf-dev protobuf-compiler z3
 
       - name: "Configure Go Runtime Environment"
         uses: actions/setup-go@v5
@@ -38,17 +39,19 @@ jobs:
 
       - name: "Compile Ring-0 eBPF Bytecode"
         run: |
+          # Added -I/usr/include to map libbpf-dev header libraries correctly
           clang -O2 -target bpf \
+            -I/usr/include \
             -I/usr/include/x86_64-linux-gnu \
             -c pkg/kernel/ebpf/monitor.c -o pkg/kernel/ebpf/monitor.o
 
       - name: "Compile Native secopsctl CLI Utility"
         run: |
+          mkdir -p release-bundle
           go build -ldflags="-s -w" -o release-bundle/secopsctl cmd/secopsctl/main.go
 
       - name: "Bundle Target Release Assets"
         run: |
-          mkdir -p release-bundle
           cp pkg/kernel/ebpf/monitor.o release-bundle/
           cp configs/secops-kernel.yaml release-bundle/
           tar -czvf secops-kernel-core-assets.tar.gz -C release-bundle .
@@ -60,4 +63,4 @@ jobs:
           draft: false
           prerelease: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
