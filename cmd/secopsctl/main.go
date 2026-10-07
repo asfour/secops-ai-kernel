@@ -43,7 +43,7 @@ func executeShellCommand(scriptPath string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Errorf("Execution step encountered a fatal fault: %v", err)
+		fmt.Printf("Execution step encountered a fatal fault: %v\n", err)
 		os.Exit(1)
 	}
 }
