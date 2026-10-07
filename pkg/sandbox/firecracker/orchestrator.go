@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -24,6 +25,12 @@ type MicroVMConfig struct {
 	VCPUCount int64
 	BootArgs  string
 
+	// AllowedSubnet is the validated subnet number (pkg/server.ExtractSubnet,
+	// [1000,9999]) the guest's network traffic is scoped to. Zero means
+	// "no network interface at all" — SpawnAndMeasure skips network
+	// fencing entirely rather than giving the guest an unscoped interface.
+	AllowedSubnet int
+
 	// AgentID / PermissionMask are forwarded to the eBPF token grant for
 	// this microVM's host process, so monitor.c's token_metadata carries
 	// the same identity the gRPC caller authenticated with.
@@ -42,6 +49,14 @@ type TokenGranter interface {
 type Orchestrator struct {
 	ActiveVMs map[string]*MicroVMConfig
 	Tokens    TokenGranter // nil disables eBPF enforcement (dev/test only)
+
+	// EnforceNetworkFence controls what happens when cfg.AllowedSubnet > 0
+	// but SetupNetworkFence fails (e.g. missing CAP_NET_ADMIN): if true,
+	// SpawnAndMeasure aborts; if false (the zero value — dev/test only,
+	// mirroring Tokens==nil), it logs and proceeds with no network
+	// interface and NetworkPacketsDropped left at 0 (unmeasured, not "no
+	// drops observed").
+	EnforceNetworkFence bool
 }
 
 func NewOrchestrator(tokens TokenGranter) *Orchestrator {
@@ -112,10 +127,8 @@ func (o *Orchestrator) SpawnIsolatedStateMirror(ctx context.Context, cfg *MicroV
 }
 
 // MeasuredDiff is what SpawnAndMeasure observed about a guest's execution.
-// MemoryDriftBytes and FilesMutated are both real observations (see their
-// doc comments). NetworkPacketsDropped is not measured: this orchestrator
-// never configures a network interface for the guest at all, so there is
-// nothing to count yet — see IMPROVEMENT_SPEC.md item #9.
+// All three fields are real observations when AllowedSubnet > 0 and
+// network fencing is enforced — see each field's doc comment.
 type MeasuredDiff struct {
 	// MemoryDriftBytes is a byte-level diff between a guest memory
 	// snapshot taken just after boot and one taken partway through the
@@ -128,6 +141,15 @@ type MeasuredDiff struct {
 	// window, read directly from the ext4 image via debugfs — no
 	// loopback mount or root required. See rootfsdiff.go.
 	FilesMutated uint64
+
+	// NetworkPacketsDropped counts packets the guest tried to send
+	// outside cfg.AllowedSubnet, via a default-deny nftables policy on
+	// a tap device scoped to that subnet — a real zero-trust enforcement
+	// signal, not passive telemetry. Zero if cfg.AllowedSubnet was 0
+	// (no network interface configured at all) or if network fencing
+	// failed and EnforceNetworkFence is false (unmeasured, not "no
+	// drops observed" — see IMPROVEMENT_SPEC.md item #15). See network.go.
+	NetworkPacketsDropped uint64
 }
 
 // SpawnAndMeasure boots a Firecracker guest from cfg via SpawnIsolatedStateMirror,
@@ -169,6 +191,32 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 	if err := api.ConfigureRootDrive(ctx, "rootfs", cfg.RootfsPath); err != nil {
 		return cfg.ID, MeasuredDiff{}, err
 	}
+
+	// Network fencing must be wired up before StartInstance: the tap
+	// device has to exist before Firecracker's /network-interfaces call
+	// can attach to it, and that call itself must happen pre-boot (same
+	// as boot-source/drives above).
+	var fence *NetworkFence
+	if cfg.AllowedSubnet > 0 {
+		f, ferr := SetupNetworkFence(cfg.ID, cfg.AllowedSubnet)
+		if ferr != nil {
+			if o.EnforceNetworkFence {
+				return cfg.ID, MeasuredDiff{}, fmt.Errorf("setting up network fence: %w", ferr)
+			}
+			log.Printf("WARNING: network fence setup failed, proceeding WITHOUT network enforcement: %v", ferr)
+		} else {
+			fence = f
+			defer func() {
+				if tdErr := fence.Teardown(); tdErr != nil {
+					log.Printf("WARNING: tearing down network fence for %s: %v", cfg.ID, tdErr)
+				}
+			}()
+			if err := api.ConfigureNetworkInterface(ctx, networkIfaceID, fence.TapName); err != nil {
+				return cfg.ID, MeasuredDiff{}, fmt.Errorf("configuring guest network interface: %w", err)
+			}
+		}
+	}
+
 	if err := api.StartInstance(ctx); err != nil {
 		return cfg.ID, MeasuredDiff{}, err
 	}
@@ -177,6 +225,12 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 	preRootfsPath := cfg.SocketPath + ".pre.rootfs.img"
 	if err := snapshotPaused(ctx, api, cfg.SocketPath+".pre.json", preMemPath, cfg.RootfsPath, preRootfsPath); err != nil {
 		return cfg.ID, MeasuredDiff{}, err
+	}
+	var preDrops uint64
+	if fence != nil {
+		if preDrops, err = fence.CountDropped(); err != nil {
+			return cfg.ID, MeasuredDiff{}, fmt.Errorf("reading pre-execution drop counter: %w", err)
+		}
 	}
 
 	select {
@@ -189,6 +243,12 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 	if err := snapshotPaused(ctx, api, cfg.SocketPath+".post.json", postMemPath, cfg.RootfsPath, postRootfsPath); err != nil {
 		return cfg.ID, MeasuredDiff{}, err
 	}
+	var postDrops uint64
+	if fence != nil {
+		if postDrops, err = fence.CountDropped(); err != nil {
+			return cfg.ID, MeasuredDiff{}, fmt.Errorf("reading post-execution drop counter: %w", err)
+		}
+	}
 
 	memDrift, err := diffFiles(preMemPath, postMemPath)
 	if err != nil {
@@ -200,8 +260,16 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 		return cfg.ID, MeasuredDiff{}, fmt.Errorf("diffing guest rootfs snapshots: %w", err)
 	}
 
-	return cfg.ID, MeasuredDiff{MemoryDriftBytes: memDrift, FilesMutated: filesMutated}, nil
+	return cfg.ID, MeasuredDiff{
+		MemoryDriftBytes:      memDrift,
+		FilesMutated:          filesMutated,
+		NetworkPacketsDropped: postDrops - preDrops,
+	}, nil
 }
+
+// networkIfaceID is the fixed Firecracker network-interface ID every
+// guest's single tap device is registered under.
+const networkIfaceID = "eth0"
 
 // snapshotPaused pauses the guest, takes a memory snapshot and a copy of
 // its rootfs image (both safe to do only while paused, since no further

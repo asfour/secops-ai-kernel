@@ -50,6 +50,13 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 		})
 	}
 
+	// AllowedSubnet scopes the guest's network fence to the subnet
+	// already validated for this graph's write-privileged nodes (see
+	// pkg/server.PrimarySubnet). ok==false (no write-privileged node, or
+	// none with a valid subnet) means the guest gets no network
+	// interface at all, rather than an unscoped one.
+	allowedSubnet, _ := PrimarySubnet(pending.graph)
+
 	microvmID := req.GetSimulationToken()
 	cfg := &firecracker.MicroVMConfig{
 		ID:            microvmID,
@@ -58,6 +65,7 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 		SocketPath:    fmt.Sprintf("/tmp/%s.sock", microvmID),
 		MemoryLimitMB: s.MemoryLimitMB,
 		CPUTimeoutMs:  pending.maxLatency,
+		AllowedSubnet: allowedSubnet,
 	}
 
 	ctx := stream.Context()
@@ -69,17 +77,16 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 		})
 	}
 
-	// MemoryDriftBytes and FilesMutated above are both real observations
-	// (see firecracker.MeasuredDiff). NetworkPacketsDropped is not
-	// measured — the orchestrator never configures a network interface
-	// for the guest at all. See IMPROVEMENT_SPEC.md item #9.
+	// MemoryDriftBytes, FilesMutated, and NetworkPacketsDropped above are
+	// all real observations (see firecracker.MeasuredDiff).
 	commitHash := sha256.Sum256([]byte(microvmID + pending.agentID))
 
 	return stream.Send(&pb.ForkVerifyResponse{
 		MicrovmId: microvmID,
 		DiffMetrics: &pb.StateDiffMetrics{
-			MemoryDriftBytes: diff.MemoryDriftBytes,
-			FilesMutated:     diff.FilesMutated,
+			MemoryDriftBytes:      diff.MemoryDriftBytes,
+			FilesMutated:          diff.FilesMutated,
+			NetworkPacketsDropped: diff.NetworkPacketsDropped,
 		},
 		Verdict:         pb.ExecutionVerdict_VERDICT_0x01_PASS,
 		CommitReadyHash: commitHash[:],

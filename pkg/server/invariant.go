@@ -175,6 +175,26 @@ func CheckNode(node *pb.IntentNode) error {
 	return nil
 }
 
+// PrimarySubnet returns the subnet of the first write-privileged node in
+// graph with a valid subnet, for callers (ForkVerifyServer) that need a
+// single subnet to scope network-fencing enforcement to. ok is false if
+// graph has no such node (e.g. every node is read-only), in which case
+// the guest should get no network interface at all rather than an
+// unscoped one.
+func PrimarySubnet(graph *pb.IntentGraph) (subnet int, ok bool) {
+	for _, node := range graph.GetNodes() {
+		if !IsWritePrivileged(node.GetActionDirective()) {
+			continue
+		}
+		s, err := ExtractSubnet(node.GetTargetResourceUrn())
+		if err != nil || !IsValidSubnet(s) {
+			continue
+		}
+		return s, true
+	}
+	return 0, false
+}
+
 // CheckGraph validates graph structure first (ValidateGraphStructure), then
 // mirrors intent_rules.dfy's VerifyGraphArray: PASS only if every node also
 // satisfies SystemInvariant.

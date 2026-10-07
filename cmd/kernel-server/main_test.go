@@ -43,12 +43,22 @@ func TestBuildTokenGranter_MissingObjectAndEnforceFalse_ReturnsNilGranterNoError
 	}
 }
 
+func TestCheckNetworkFenceCapability_EnforceFalseNeverErrors(t *testing.T) {
+	// Whether or not this host can actually create a tap+nftables fence,
+	// enforceNetworkFence=false must never return an error — only
+	// enforceNetworkFence=true can turn an unavailable capability into a
+	// fatal startup error.
+	if _, err := checkNetworkFenceCapability(false); err != nil {
+		t.Fatalf("expected no error with enforceNetworkFence=false, got: %v", err)
+	}
+}
+
 func TestNewGRPCServer_RegistersAllThreeServices(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Engine.MaxExecutionWindowMs = 500
 	cfg.Engine.MemoryFenceBytes = 512 * 1024 * 1024
 
-	grpcServer := newGRPCServer(nil, cfg, "/kernel", "/rootfs")
+	grpcServer := newGRPCServer(nil, false, cfg, "/kernel", "/rootfs")
 
 	info := grpcServer.GetServiceInfo()
 	for _, name := range []string{
