@@ -1,5 +1,4 @@
 name: "SecOps Kernel Operations Notification Bridge"
-
 on:
   push:
     branches: [ "main" ]
@@ -8,7 +7,6 @@ on:
   workflow_run:
     workflows: ["SecOps Kernel Machine Attestation CI"]
     types: [completed]
-
 jobs:
   dispatch-slack-payload:
     runs-on: ubuntu-latest
@@ -16,16 +14,12 @@ jobs:
       - name: "Post Status Packet via Native Curl Stream"
         if: always()
         run: |
-          WEBHOOK_URL="\${{ secrets.SLACK_WEBHOOK_URL }}"
-          REPO_NAME="\${{ github.repository }}"
-          WORKFLOW_NAME="\${{ github.workflow }}"
-          JOB_STATUS="\${{ github.event.workflow_run.conclusion || job.status }}"
-
-          if [ -z "\$WEBHOOK_URL" ]; then
-            echo "⚠️ Slack Operational Token is empty or unconfigured inside GitHub Secrets. Skipping network connection pipeline."
+          WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
+          REPO_NAME="${{ github.repository }}"
+          WORKFLOW_NAME="${{ github.workflow }}"
+          JOB_STATUS="${{ github.event.workflow_run.conclusion || job.status }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "[WARNING] Slack token is empty or unconfigured. Skipping network pipeline."
             exit 0
           fi
-
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚨 *SecOps Kernel Operations Alert*\n*Repository:* \${REPO_NAME}\n*Workflow:* \`${WORKFLOW_NAME}\`\n*Execution Status:* **\${JOB_STATUS}**\"}" \
-            "\$WEBHOOK_URL"
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"[ALERT] SecOps Kernel Operations Update\\n*Repository:* ${REPO_NAME}\\n*Workflow:* `${WORKFLOW_NAME}`\\n*Status:* **${JOB_STATUS}**\"}" "${WEBHOOK_URL}"
