@@ -15,14 +15,14 @@ jobs:
     steps:
       - name: "Post Status Packet via Native Curl Stream"
         if: always()
-        # Clean, unescaped expressions evaluate perfectly inside the GitHub runner engine context
+        # Clean, unescaped native expressions evaluate directly to string literals without backslash injection
         env:
           WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
           REPO_NAME: \${{ github.repository }}
           WORKFLOW_NAME: \${{ github.workflow }}
           JOB_STATUS: \${{ job.status }}
         run: |
-          # Flat shell code evaluates without data structure pollution
+          # Check for empty string correctly
           if [ -z "\$WEBHOOK_URL" ]; then
             echo "⚠️ Slack Operational Token is empty or unconfigured inside GitHub Secrets. Skipping network connection pipeline."
             exit 0
