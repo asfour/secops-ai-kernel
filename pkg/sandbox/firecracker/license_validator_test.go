@@ -4,10 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
+
+	"secops-kernel/pkg/kerncode"
 )
 
 const testSecretKey = "test-only-secret-key-at-least-32-bytes-long"
@@ -62,8 +64,8 @@ func TestVerifyMachineLicense_Expired(t *testing.T) {
 	}
 
 	passed, err := validator.VerifyMachineLicense(lic)
-	if err == nil {
-		t.Fatal("Expected validation to return temporal fault error, got nil")
+	if err == nil || !errors.Is(err, kerncode.LicensingTokenExpired) {
+		t.Fatalf("Expected kerncode.LicensingTokenExpired, got: %v", err)
 	}
 	if passed {
 		t.Fatal("Expected expired token state check to return false, got true")
@@ -84,8 +86,8 @@ func TestVerifyMachineLicense_InvalidSignature(t *testing.T) {
 	}
 
 	passed, err := validator.VerifyMachineLicense(lic)
-	if err == nil || !strings.Contains(err.Error(), "0x00_LICENSING_SIGNATURE_MISMATCH") {
-		t.Fatalf("Expected signature mismatch error, got: %v", err)
+	if err == nil || !errors.Is(err, kerncode.LicensingSignatureMismatch) {
+		t.Fatalf("Expected kerncode.LicensingSignatureMismatch, got: %v", err)
 	}
 	if passed {
 		t.Fatal("Expected invalid signature result to evaluate to false, got true")

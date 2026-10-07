@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"secops-kernel/pkg/kerncode"
 )
 
 type AgentProposal struct {
@@ -119,7 +121,7 @@ func (cq *ConsensusQuorum) EvaluateProposals(ctx context.Context, incoming <-cha
 			}
 
 		case <-timeoutChan:
-			return nil, fmt.Errorf("0x00_CONSENSUS_TIMEOUT_DEADLOCK")
+			return nil, fmt.Errorf("no quorum reached within %s: %w", cq.Timeout, kerncode.ConsensusTimeoutDeadlock)
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
