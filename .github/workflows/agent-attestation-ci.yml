@@ -6,34 +6,32 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   kernel-verification:
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout Repository"
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: "Install System Dependencies and Toolchains"
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y protobuf-compiler z3 build-essential
+          sudo apt-get install -y protobuf-compiler z3 build-essential libbpf-dev clang llvm
 
       - name: "Install Go and Compilers"
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v5
         with:
           go-version: '1.25'
 
       - name: "Validate gRPC Protocol Schemas"
         run: |
-          # Download and install specific target Go protobuf extensions
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          
-          # Force export the Go bin pathway directly into this step context
           export GOPATH=$(go env GOPATH)
           export PATH=$PATH:$GOPATH/bin
-          
-          # Compile stubs and confirm syntax safety
           protoc -I=pkg/api/v2/ \
             --go_out=paths=source_relative:pkg/api/v2/ \
             --go-grpc_out=paths=source_relative:pkg/api/v2/ \
@@ -42,21 +40,27 @@ jobs:
       - name: "Install Dafny via Dotnet CLI"
         run: |
           dotnet tool install -g dafny
-          # Inject the global dotnet tools directory directly into the systemic GitHub Path matrix
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
       - name: "Verify Formal Dafny Invariants"
         run: |
-          # Execute formal validation passing explicit link mappings to the local Z3 bin binary 
           dafny verify --solver-path=/usr/bin/z3 pkg/verify/dafny/intent_rules.dfy
 
       - name: "Compile and Link System Sandbox Hooks"
         run: |
-          # Enforce module synchronization before compilation
           go mod tidy
           go build ./pkg/sandbox/firecracker/...
+
+      - name: "Run Test Suite with Code Coverage Monitoring"
+        run: |
+          # Execute test suites across all packages while generating an entry profile map
+          go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: "Assert Strict Quality Coverage Floor"
+        run: |
+          # Evaluate raw statement metrics and enforce an un-bypassable 80% boundary checkpoint
+          go tool cover -func=coverage.out | grep "total:" | awk '{print $3}' | sed 's/%//' | awk '{ if ($1 < 80.0) { print "❌ CRITICAL FAULT: Test Coverage falls below minimum 80% boundary threshold!"; exit 1 } else { print "✅ Coverage gate verified successfully." } }'
 
       - name: "Generate Cryptographic Compliance Attestation Block"
         run: |
           sha256sum configs/secops-kernel.yaml > attested_build_manifest.sha256
-          echo "::notice::Build certified. Kernel payload verified under Zero-Trust parameters."
