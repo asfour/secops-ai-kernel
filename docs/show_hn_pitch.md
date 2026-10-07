@@ -11,11 +11,11 @@ Current agent safety platforms treat AI like human users—wrapping them in chat
 We treat autonomous agents as volatile, untrusted code paths. Instead of monitoring text, we constrain them at the hypervisor and memory boundary:
 1. **Fork-and-Verify MicroVMs**: Agents never touch live systems. The kernel forks a zero-copy state snapshot into an isolated Firecracker microVM. The agent executes inside the mirror, and the kernel securely commits only the verified, safe state diff to production.
 2. **Ring-0 eBPF Interception**: A native eBPF probe captures `sys_enter_execve` sequences out-of-band. If an agent drifts from its intent graph or its single-use cryptographic token expires (10ms TTL), the kernel kills the thread instantly via SIGKILL.
-3. **Byzantine Fault Tolerant Voting**: High-impact executions require a 2-out-of-3 multi-model consensus across distinct architectures (e.g., Claude, GPT, and a local fine-tune) to eliminate single-model hallucinations.
+3. **Layer-0 Embedded OEM Architecture**: Built as a headless utility. SecOps Kernel acts as an embedded secure runtime. Framework builders (like CrewAI, LangGraph, or AutoGen) can bundle our engine directly into their premium enterprise packages via standard gRPC and Model Context Protocol (MCP) data streams.
 
 We've benchmarked the engine to compile ZK-Intents and spin up sandboxes in under **15 milliseconds**, introducing negligible overhead.
 
 * **GitHub Repository**: https://github.com (Apache 2.0)
-* **Tech Stack**: Go, Rust, C (eBPF), Dafny
+* **Tech Stack**: Go (v1.25), Rust, C (eBPF), Dafny, Python SDK
 
 We would love to get your feedback on our memory-fencing model and how you are managing agent risk inside your infrastructure.
