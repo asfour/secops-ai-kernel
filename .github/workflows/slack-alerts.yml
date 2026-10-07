@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: "Post Status Packet via Native Curl Stream"
         if: always()
-        # Clean, unescaped native expressions evaluate directly to string literals without backslash injection
+        # Clean, unescaped native expressions evaluate directly to string literals without backslash pollution
         env:
           WEBHOOK_URL: \${{ secrets.SLACK_WEBHOOK_URL }}
           REPO_NAME: \${{ github.repository }}
