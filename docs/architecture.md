@@ -34,12 +34,16 @@ What each stage actually does today:
 * **ForkVerifyEngine.ExecuteForkVerify** (`pkg/server/forkverify.go`)
   redeems that token and calls `Orchestrator.SpawnAndMeasure`
   (`pkg/sandbox/firecracker`), which boots a Firecracker guest over its
-  real REST API (boot-source/drives/machine-config/actions), takes a
-  memory snapshot just after boot and another partway through the
-  execution window, and returns a real byte-level diff as
-  `MemoryDriftBytes`. `FilesMutated` and `NetworkPacketsDropped` are
-  **not** measured — they'd need a rootfs overlay diff and a
-  network-namespace packet counter, neither of which exists yet.
+  real REST API (boot-source/drives/machine-config/actions). While the
+  guest is paused (so no further writes can race the copy), it takes a
+  memory snapshot and a copy of the rootfs image just after boot, and
+  another pair partway through the execution window, returning real
+  diffs as `MemoryDriftBytes` (byte-level) and `FilesMutated` (regular
+  files added/removed/changed, read from the ext4 image directly via
+  `debugfs` — no loopback mount or root required; see
+  `pkg/sandbox/firecracker/rootfsdiff.go`). `NetworkPacketsDropped` is
+  **not** measured — the orchestrator never configures a network
+  interface for the guest at all, so there's nothing to count yet.
 * **eBPF enforcement** (`pkg/kernel/ebpf/monitor.c` +
   `pkg/kernel/ebpftoken`): the orchestrator starts its child process
   under `PTRACE_TRACEME` and grants it a token in `active_tokens_map`
