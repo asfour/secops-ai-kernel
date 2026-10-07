@@ -19,15 +19,25 @@ func main() {
 		executeShellCommand("./setup.sh")
 	case "verify":
 		fmt.Println("🔍 Asserting system hardware acceleration boundaries...")
-		if _, err := os.Stat("/dev/kvm"); os.IsNotExist(err) {
-			fmt.Println("❌ ERROR: Hardware-level nested acceleration (/dev/kvm) is completely inaccessible.")
+		ok, message := verifyKVMAccess("/dev/kvm")
+		fmt.Println(message)
+		if !ok {
 			os.Exit(1)
 		}
-		fmt.Println("✅ Hardware virtualization layers verified safe.")
 	default:
 		printUsage()
 		os.Exit(1)
 	}
+}
+
+// verifyKVMAccess reports whether kvmPath exists, and the message to print
+// either way. Pulled out of main's "verify" case so it's testable against
+// an arbitrary path instead of being hardcoded to the real /dev/kvm.
+func verifyKVMAccess(kvmPath string) (ok bool, message string) {
+	if _, err := os.Stat(kvmPath); os.IsNotExist(err) {
+		return false, "❌ ERROR: Hardware-level nested acceleration (/dev/kvm) is completely inaccessible."
+	}
+	return true, "✅ Hardware virtualization layers verified safe."
 }
 
 func printUsage() {

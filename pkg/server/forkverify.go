@@ -24,14 +24,21 @@ type ForkVerifyServer struct {
 	// is not implemented — see IMPROVEMENT_SPEC.md item #6.
 	KernelPath string
 	RootfsPath string
+
+	// MemoryLimitMB is the default microVM memory limit, sourced from
+	// configs/secops-kernel.yaml's engine.memory_fence_bytes. Previously
+	// this was a hardcoded 512 with no connection to that config file at
+	// all.
+	MemoryLimitMB int64
 }
 
-func NewForkVerifyServer(compiler *CompilerServer, orchestrator *firecracker.Orchestrator, kernelPath, rootfsPath string) *ForkVerifyServer {
+func NewForkVerifyServer(compiler *CompilerServer, orchestrator *firecracker.Orchestrator, kernelPath, rootfsPath string, memoryLimitMB int64) *ForkVerifyServer {
 	return &ForkVerifyServer{
-		compiler:     compiler,
-		orchestrator: orchestrator,
-		KernelPath:   kernelPath,
-		RootfsPath:   rootfsPath,
+		compiler:      compiler,
+		orchestrator:  orchestrator,
+		KernelPath:    kernelPath,
+		RootfsPath:    rootfsPath,
+		MemoryLimitMB: memoryLimitMB,
 	}
 }
 
@@ -49,7 +56,7 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 		KernelPath:    s.KernelPath,
 		RootfsPath:    s.RootfsPath,
 		SocketPath:    fmt.Sprintf("/tmp/%s.sock", microvmID),
-		MemoryLimitMB: 512,
+		MemoryLimitMB: s.MemoryLimitMB,
 		CPUTimeoutMs:  pending.maxLatency,
 	}
 

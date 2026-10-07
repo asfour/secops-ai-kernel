@@ -29,4 +29,6 @@ var (
 
 	IntentInvariantViolation = Code{"0x00_INTENT_INVARIANT_VIOLATION"}
 	IntentGraphMalformed     = Code{"0x00_INTENT_GRAPH_MALFORMED"}
+
+	ExecutionWindowExceedsConfiguredCeiling = Code{"0x00_EXECUTION_WINDOW_EXCEEDS_CONFIGURED_CEILING"}
 )

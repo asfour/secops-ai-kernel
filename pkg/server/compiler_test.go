@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "secops-kernel/pkg/api/v2"
 )
@@ -63,5 +64,50 @@ func TestCompileZKIntent_AbortsOnInvariantViolation(t *testing.T) {
 	}
 	if resp.SimulationToken != "" {
 		t.Fatal("expected no simulation token to be minted on ABORT")
+	}
+}
+
+func TestCompileZKIntent_AbortsWhenExceedingConfiguredCeiling(t *testing.T) {
+	s := NewCompilerServerWithCeiling(500 * time.Millisecond)
+	req := &pb.CompileZKIntentRequest{
+		AgentId:             "agent-3",
+		MaxAllowedLatencyMs: 5000, // exceeds the 500ms ceiling
+		ExecutionIntentGraph: &pb.IntentGraph{
+			Nodes: []*pb.IntentNode{
+				{NodeId: "n-0", ActionDirective: "SYS_CALL_NETWORK_REDUCE", TargetResourceUrn: "urn:secops:aws:subnet-1234"},
+			},
+		},
+	}
+
+	resp, err := s.CompileZKIntent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Verdict != pb.ExecutionVerdict_VERDICT_0x00_ABORT {
+		t.Fatalf("expected ABORT for a request exceeding the configured ceiling, got %v", resp.Verdict)
+	}
+	if resp.SimulationToken != "" {
+		t.Fatal("expected no simulation token to be minted when the ceiling is exceeded")
+	}
+}
+
+func TestCompileZKIntent_PassesWithinConfiguredCeiling(t *testing.T) {
+	s := NewCompilerServerWithCeiling(500 * time.Millisecond)
+	req := &pb.CompileZKIntentRequest{
+		AgentId:             "agent-4",
+		MaxAllowedLatencyMs: 100,
+		ExecutionIntentGraph: &pb.IntentGraph{
+			Nodes: []*pb.IntentNode{
+				{NodeId: "n-0", ActionDirective: "SYS_CALL_NETWORK_REDUCE", TargetResourceUrn: "urn:secops:aws:subnet-1234"},
+			},
+		},
+	}
+
+	resp, err := s.CompileZKIntent(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Verdict != pb.ExecutionVerdict_VERDICT_0x01_PASS {
+		t.Fatalf("expected PASS for a request within the ceiling, got %v", resp.Verdict)
 	}
 }

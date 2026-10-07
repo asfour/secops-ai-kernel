@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"log"
 	"time"
 
@@ -28,11 +29,31 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	tokenString := "runtime_session_cryptographic_root_key_2026"
-	tokenHash := sha256.Sum256([]byte(tokenString))
+	intentRequest := buildIntentRequest(TargetAgentUUID, "runtime_session_cryptographic_root_key_2026")
 
-	intentRequest := &pb.CompileZKIntentRequest{
-		AgentId:             TargetAgentUUID,
+	log.Printf("[Machine Stream] Dispatching Intent Matrix to ZKCompiler layer...")
+
+	response, err := compilerClient.CompileZKIntent(ctx, intentRequest)
+	if err != nil {
+		log.Fatalf("Execution denied at OS Kernel layer: %v", err)
+	}
+
+	if err := evaluateResponse(response); err != nil {
+		log.Fatalf("[CRITICAL HALT] %v", err)
+	}
+	log.Printf("[Attestation Locked] Simulation token acquired: %s", response.SimulationToken)
+}
+
+// buildIntentRequest constructs the demo CompileZKIntentRequest this
+// worker sends. Pulled out of main so it can be tested without a network
+// dial: the target subnet and directive must satisfy pkg/server's
+// write-privilege/subnet invariant (SYS_CALL_* namespace, numeric subnet
+// in [1000, 9999]) or the kernel will abort it.
+func buildIntentRequest(agentID, sessionKey string) *pb.CompileZKIntentRequest {
+	tokenHash := sha256.Sum256([]byte(sessionKey))
+
+	return &pb.CompileZKIntentRequest{
+		AgentId:             agentID,
 		AuthTokenHash:       tokenHash[:],
 		MaxAllowedLatencyMs: 15,
 		ExecutionIntentGraph: &pb.IntentGraph{
@@ -49,17 +70,13 @@ func main() {
 			Edges: []*pb.IntentEdge{},
 		},
 	}
+}
 
-	log.Printf("[Machine Stream] Dispatching Intent Matrix to ZKCompiler layer...")
-
-	response, err := compilerClient.CompileZKIntent(ctx, intentRequest)
-	if err != nil {
-		log.Fatalf("Execution denied at OS Kernel layer: %v", err)
+// evaluateResponse returns nil only on VERDICT_0x01_PASS, pulled out of
+// main so the pass/fail branch is testable independent of an actual RPC.
+func evaluateResponse(resp *pb.CompileZKIntentResponse) error {
+	if resp.GetVerdict() != pb.ExecutionVerdict_VERDICT_0x01_PASS {
+		return fmt.Errorf("kernel rejected compiled execution logic parameters (verdict=%s)", resp.GetVerdict())
 	}
-
-	if response.Verdict == pb.ExecutionVerdict_VERDICT_0x01_PASS {
-		log.Printf("[Attestation Locked] Simulation token acquired: %s", response.SimulationToken)
-	} else {
-		log.Fatalf("[CRITICAL HALT] Kernel rejected compiled execution logic parameters. Aborting thread.")
-	}
+	return nil
 }
