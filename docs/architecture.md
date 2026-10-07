@@ -64,10 +64,12 @@ a static CI check on `intent_rules.dfy` itself). See
 at the repository root for the full, current gap list.
 
 ## Isolation Boundary Frameworks
-* **Firecracker MicroVMs**: configured per-request with a caller-supplied
-  memory limit and execution timeout; the post-execution memory snapshot
-  is taken at half of that timeout to avoid racing the orchestrator's own
-  background process-kill goroutine.
+* **Firecracker MicroVMs**: memory limit defaults from
+  `configs/secops-kernel.yaml`'s `engine.memory_fence_bytes` (see
+  `pkg/config`); the execution timeout comes from the request's
+  `max_allowed_latency_ms`, capped by `engine.max_execution_window_ms`.
+  The post-execution memory snapshot is taken at half of that timeout to
+  avoid racing the orchestrator's own background process-kill goroutine.
 * **eBPF System call hooks**: attach to the host's `sys_enter_execve`
   tracepoint; a process is killed the instant it has no live, unexpired
   entry in `active_tokens_map`.

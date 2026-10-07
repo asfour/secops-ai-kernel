@@ -55,9 +55,17 @@ by default.
 
 ## Configuration
 
-`configs/secops-kernel.yaml` documents intended runtime policy values
-(timeouts, token TTL, fail-safe modes), but **no code currently reads
-this file** — `cmd/kernel-server`'s actual knobs are its command-line
-flags (`-listen`, `-kernel-path`, `-rootfs-path`, `-bpf-object`,
-`-enforce-ebpf`). Treat the YAML file as a design sketch for a future
-config loader, not as live configuration.
+`cmd/kernel-server` loads `configs/secops-kernel.yaml` (override with
+`-config`) via `pkg/config`, and fails to start if it's missing,
+malformed, or has a non-positive `engine.max_execution_window_ms` /
+`engine.memory_fence_bytes`. Two fields are actually enforced today:
+
+* `engine.max_execution_window_ms` — a ceiling on a request's
+  `max_allowed_latency_ms`; requests asking for a longer execution
+  window are aborted.
+* `engine.memory_fence_bytes` — the default microVM memory limit.
+
+Every other field (`taint_tracking.*`, `cryptography.attestation_mode`
+/ `zk_circuit_path`, `fail_safe.*`) is parsed and shape-validated but
+not yet wired to any behavior — see `pkg/config/config.go`'s field
+comments for specifics, and `IMPROVEMENT_SPEC.md` item #14.
