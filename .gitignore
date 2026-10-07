@@ -20,6 +20,10 @@ configs/running-state.json
 /target/
 Cargo.lock
 
+# Python bytecode cache
+__pycache__/
+*.pyc
+
 # Operating System Noise
 .DS_Store
 .thumbs/

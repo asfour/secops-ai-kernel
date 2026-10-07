@@ -54,25 +54,24 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 	}
 
 	ctx := stream.Context()
-	if _, err := s.orchestrator.SpawnIsolatedStateMirror(ctx, cfg); err != nil {
+	_, memoryDriftBytes, err := s.orchestrator.SpawnAndMeasure(ctx, cfg)
+	if err != nil {
 		return stream.Send(&pb.ForkVerifyResponse{
 			MicrovmId: microvmID,
 			Verdict:   pb.ExecutionVerdict_VERDICT_0x00_ABORT,
 		})
 	}
 
-	// NOTE: real file/memory/network diffing against the microVM's guest
-	// state is not implemented yet (docs/improvement_spec.md item #6).
-	// SystemCallEntropyHash below is a commitment over the *request*, not
-	// an observation of what the guest actually did, and must not be
-	// read as evidence of verified isolation.
-	entropy := sha256.Sum256(req.GetPayloadBinaryStream())
+	// MemoryDriftBytes above is a real, if coarse, observation of the
+	// guest's memory snapshots. FilesMutated and NetworkPacketsDropped
+	// are not measured — see docs/improvement_spec.md item #6 for what's
+	// still missing (rootfs overlay diffing, network packet counters).
 	commitHash := sha256.Sum256([]byte(microvmID + pending.agentID))
 
 	return stream.Send(&pb.ForkVerifyResponse{
 		MicrovmId: microvmID,
 		DiffMetrics: &pb.StateDiffMetrics{
-			SystemCallEntropyHash: entropy[:],
+			MemoryDriftBytes: memoryDriftBytes,
 		},
 		Verdict:         pb.ExecutionVerdict_VERDICT_0x01_PASS,
 		CommitReadyHash: commitHash[:],

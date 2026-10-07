@@ -18,6 +18,11 @@ type MicroVMConfig struct {
 	MemoryLimitMB int64
 	CPUTimeoutMs  time.Duration
 
+	// VCPUCount defaults to 1 if unset. BootArgs is passed through to
+	// Firecracker's /boot-source as-is.
+	VCPUCount int64
+	BootArgs  string
+
 	// AgentID / PermissionMask are forwarded to the eBPF token grant for
 	// this microVM's host process, so monitor.c's token_metadata carries
 	// the same identity the gRPC caller authenticated with.
@@ -103,6 +108,102 @@ func (o *Orchestrator) SpawnIsolatedStateMirror(ctx context.Context, cfg *MicroV
 	}()
 
 	return cfg.ID, nil
+}
+
+// SpawnAndMeasure boots a Firecracker guest from cfg via SpawnIsolatedStateMirror,
+// configures it over the Firecracker REST API, and returns a real byte-level
+// memory diff between a snapshot taken just after boot and one taken partway
+// through the execution window — replacing the previous placeholder, which
+// hashed the *request* and never observed anything the guest actually did
+// (docs/improvement_spec.md item #6).
+//
+// FilesMutated and NetworkPacketsDropped are not measured here: they would
+// require a rootfs overlay diff and a network-namespace packet counter
+// respectively, neither of which this orchestrator sets up. Callers must
+// not treat their absence as "zero changes" — only MemoryDriftBytes is a
+// real observation.
+//
+// The post-execution snapshot is deliberately taken at half of
+// cfg.CPUTimeoutMs, not at the full timeout: SpawnIsolatedStateMirror's own
+// background goroutine kills the process and removes cfg.SocketPath at the
+// full timeout, which would otherwise race this method's final API calls.
+func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) (microvmID string, memoryDriftBytes uint64, err error) {
+	if _, err := o.SpawnIsolatedStateMirror(ctx, cfg); err != nil {
+		return "", 0, err
+	}
+
+	if err := waitForSocket(ctx, cfg.SocketPath, 2*time.Second); err != nil {
+		return cfg.ID, 0, fmt.Errorf("waiting for firecracker api socket: %w", err)
+	}
+
+	api := NewAPIClient(cfg.SocketPath)
+	vcpuCount := cfg.VCPUCount
+	if vcpuCount <= 0 {
+		vcpuCount = 1
+	}
+
+	if err := api.ConfigureMachine(ctx, vcpuCount, cfg.MemoryLimitMB); err != nil {
+		return cfg.ID, 0, err
+	}
+	if err := api.ConfigureBootSource(ctx, cfg.KernelPath, cfg.BootArgs); err != nil {
+		return cfg.ID, 0, err
+	}
+	if err := api.ConfigureRootDrive(ctx, "rootfs", cfg.RootfsPath); err != nil {
+		return cfg.ID, 0, err
+	}
+	if err := api.StartInstance(ctx); err != nil {
+		return cfg.ID, 0, err
+	}
+
+	preMemPath := cfg.SocketPath + ".pre.mem"
+	if err := snapshotPaused(ctx, api, cfg.SocketPath+".pre.json", preMemPath); err != nil {
+		return cfg.ID, 0, err
+	}
+
+	select {
+	case <-time.After(cfg.CPUTimeoutMs / 2):
+	case <-ctx.Done():
+	}
+
+	postMemPath := cfg.SocketPath + ".post.mem"
+	if err := snapshotPaused(ctx, api, cfg.SocketPath+".post.json", postMemPath); err != nil {
+		return cfg.ID, 0, err
+	}
+
+	drift, err := diffFiles(preMemPath, postMemPath)
+	if err != nil {
+		return cfg.ID, 0, fmt.Errorf("diffing guest memory snapshots: %w", err)
+	}
+
+	return cfg.ID, drift, nil
+}
+
+func snapshotPaused(ctx context.Context, api *APIClient, snapshotPath, memFilePath string) error {
+	if err := api.PauseVM(ctx); err != nil {
+		return fmt.Errorf("pausing guest for snapshot: %w", err)
+	}
+	if err := api.CreateSnapshot(ctx, snapshotPath, memFilePath); err != nil {
+		return fmt.Errorf("creating guest snapshot: %w", err)
+	}
+	if err := api.ResumeVM(ctx); err != nil {
+		return fmt.Errorf("resuming guest after snapshot: %w", err)
+	}
+	return nil
+}
+
+func waitForSocket(ctx context.Context, path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("timed out waiting for %q to appear", path)
 }
 
 func (o *Orchestrator) waitForExecStopAndGrantToken(cfg *MicroVMConfig, pid int) error {

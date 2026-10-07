@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"sync"
 	"time"
@@ -14,19 +15,58 @@ type AgentProposal struct {
 	Signature     []byte
 }
 
-type ConsensusQuorum struct {
-	mu            sync.Mutex
-	Proposals     map[string]*AgentProposal
-	RequiredVotes int
-	Timeout       time.Duration
+// SigningMessage is the exact byte sequence a proposal's Signature must
+// cover. Keeping this exported lets callers (and tests) construct valid
+// signatures without duplicating the layout.
+func SigningMessage(p *AgentProposal) []byte {
+	msg := make([]byte, 0, len(p.AgentID)+len(p.ModelArch)+len(p.StateDiffHash)+2)
+	msg = append(msg, p.AgentID...)
+	msg = append(msg, ':')
+	msg = append(msg, p.ModelArch...)
+	msg = append(msg, ':')
+	msg = append(msg, p.StateDiffHash...)
+	return msg
 }
 
-func NewConsensusQuorum() *ConsensusQuorum {
+type ConsensusQuorum struct {
+	mu sync.Mutex
+
+	// Proposals is keyed by AgentID (a verified identity), not ModelArch.
+	//
+	// Keying by ModelArch (the previous behavior) meant two distinct
+	// agents sharing an architecture silently overwrote each other, and
+	// nothing stopped a single compromised agent from submitting several
+	// proposals under different *claimed* ModelArch values to manufacture
+	// the "heterogeneous" quorum on its own. See
+	// docs/improvement_spec.md item #8.
+	Proposals map[string]*AgentProposal
+
+	// PublicKeys maps a registered AgentID to the ed25519 key it must
+	// sign proposals with. A proposal from an AgentID not in this map, or
+	// with a signature that doesn't verify, is dropped before counting.
+	PublicKeys map[string]ed25519.PublicKey
+
+	RequiredVotes   int
+	RequiredArchDiv int // minimum distinct ModelArch values required among the counted votes
+	Timeout         time.Duration
+}
+
+func NewConsensusQuorum(publicKeys map[string]ed25519.PublicKey) *ConsensusQuorum {
 	return &ConsensusQuorum{
-		Proposals:     make(map[string]*AgentProposal),
-		RequiredVotes: 2, // Hard-coded 2-out-of-3 Byzantine Quorum
-		Timeout:       450 * time.Millisecond,
+		Proposals:       make(map[string]*AgentProposal),
+		PublicKeys:      publicKeys,
+		RequiredVotes:   2, // Hard-coded 2-out-of-3 Byzantine Quorum
+		RequiredArchDiv: 2, // Preserve the original heterogeneous-model intent
+		Timeout:         450 * time.Millisecond,
 	}
+}
+
+func (cq *ConsensusQuorum) verify(prop *AgentProposal) bool {
+	pub, ok := cq.PublicKeys[prop.AgentID]
+	if !ok {
+		return false
+	}
+	return ed25519.Verify(pub, SigningMessage(prop), prop.Signature)
 }
 
 func (cq *ConsensusQuorum) EvaluateProposals(ctx context.Context, incoming <-chan *AgentProposal) ([]byte, error) {
@@ -38,19 +78,38 @@ func (cq *ConsensusQuorum) EvaluateProposals(ctx context.Context, incoming <-cha
 			if prop == nil {
 				continue
 			}
-			cq.mu.Lock()
-			// Enforce structural architecture decoupling (Models must be heterogeneous)
-			cq.Proposals[prop.ModelArch] = prop
+			if !cq.verify(prop) {
+				// Unregistered agent or invalid/forged signature: never
+				// counted, regardless of how many times it's resubmitted.
+				continue
+			}
 
-			// Tabulate agreement vectors
-			hashCounts := make(map[string]int)
+			cq.mu.Lock()
+			// One live proposal per verified AgentID. A later proposal
+			// from the same agent replaces its earlier one rather than
+			// stacking additional votes.
+			cq.Proposals[prop.AgentID] = prop
+
+			hashCounts := make(map[string]map[string]bool) // hash -> set of ModelArch represented
 			var winningHash []byte
 
 			for _, p := range cq.Proposals {
 				hashStr := fmt.Sprintf("%x", p.StateDiffHash)
-				hashCounts[hashStr]++
-				if hashCounts[hashStr] >= cq.RequiredVotes {
-					winningHash = p.StateDiffHash
+				if hashCounts[hashStr] == nil {
+					hashCounts[hashStr] = make(map[string]bool)
+				}
+				hashCounts[hashStr][p.ModelArch] = true
+			}
+
+			for hashStr, archSet := range hashCounts {
+				voteCount := 0
+				for _, p := range cq.Proposals {
+					if fmt.Sprintf("%x", p.StateDiffHash) == hashStr {
+						voteCount++
+					}
+				}
+				if voteCount >= cq.RequiredVotes && len(archSet) >= cq.RequiredArchDiv {
+					winningHash = cq.Proposals[firstAgentWithHash(cq.Proposals, hashStr)].StateDiffHash
 				}
 			}
 			cq.mu.Unlock()
@@ -65,4 +124,13 @@ func (cq *ConsensusQuorum) EvaluateProposals(ctx context.Context, incoming <-cha
 			return nil, ctx.Err()
 		}
 	}
+}
+
+func firstAgentWithHash(proposals map[string]*AgentProposal, hashStr string) string {
+	for agentID, p := range proposals {
+		if fmt.Sprintf("%x", p.StateDiffHash) == hashStr {
+			return agentID
+		}
+	}
+	return ""
 }
