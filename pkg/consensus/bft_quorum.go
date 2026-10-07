@@ -40,7 +40,7 @@ type ConsensusQuorum struct {
 	// nothing stopped a single compromised agent from submitting several
 	// proposals under different *claimed* ModelArch values to manufacture
 	// the "heterogeneous" quorum on its own. See
-	// docs/improvement_spec.md item #8.
+	// IMPROVEMENT_SPEC.md item #8.
 	Proposals map[string]*AgentProposal
 
 	// PublicKeys maps a registered AgentID to the ed25519 key it must

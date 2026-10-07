@@ -2,7 +2,7 @@
 // and manages the active_tokens_map it reads from. Without this controller the
 // monitor's map is always empty, so every execve on the host gets SIGKILL'd
 // regardless of whether it came from a kernel-governed process. See
-// docs/improvement_spec.md item #3.
+// IMPROVEMENT_SPEC.md item #3.
 package ebpftoken
 
 import (

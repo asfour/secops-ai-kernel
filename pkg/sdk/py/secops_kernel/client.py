@@ -12,7 +12,7 @@ class SecOpsKernelClient:
 
     Requires mutual TLS by default. Previously this client used
     grpc.insecure_channel unconditionally regardless of what SECURITY.md
-    claims about mTLS enforcement (docs/improvement_spec.md item #7).
+    claims about mTLS enforcement (IMPROVEMENT_SPEC.md item #7).
     Pass explicit cert paths (or set SECOPS_SERVER_CA_CERT /
     SECOPS_CLIENT_KEY / SECOPS_CLIENT_CERT), or pass insecure=True to
     opt into an unauthenticated channel for local development only.

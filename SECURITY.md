@@ -1,6 +1,6 @@
 # Vulnerability Disclosure Policy (SECURITY.md)
 
-> **Status: prototype.** See [docs/improvement_spec.md](docs/improvement_spec.md)
+> **Status: prototype.** See [IMPROVEMENT_SPEC.md](IMPROVEMENT_SPEC.md)
 > for what is currently implemented versus aspirational. The disclosure
 > process below is real; specific SLA timings and encryption claims
 > elsewhere in this repo's docs should not be relied on as verified.

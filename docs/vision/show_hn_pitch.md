@@ -1,6 +1,6 @@
 # Show HN: SecOps Kernel – An Immutable OS Engine for Autonomous AI Agents
 
-> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [docs/improvement_spec.md](../improvement_spec.md).
+> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [IMPROVEMENT_SPEC.md](https://github.com/asfour/secops-ai-kernel/blob/main/IMPROVEMENT_SPEC.md).
 
 
 

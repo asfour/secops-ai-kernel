@@ -13,7 +13,7 @@ version: "3.8"
 #     passes through /dev/kvm so the container can actually load eBPF
 #     programs and boot Firecracker microVMs. Previously these privileges
 #     were granted unconditionally just to run `go test`, which doesn't
-#     need any of them (docs/improvement_spec.md item #10).
+#     need any of them (IMPROVEMENT_SPEC.md item #10).
 services:
   kernel-core-dev:
     image: golang:1.25-bookworm

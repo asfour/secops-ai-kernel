@@ -21,7 +21,7 @@ type ForkVerifyServer struct {
 	// KernelPath / RootfsPath point at the guest boot images every
 	// microVM replay uses. Real per-request guest state injection
 	// (cloning the actual target resource under test into the rootfs)
-	// is not implemented — see docs/improvement_spec.md item #6.
+	// is not implemented — see IMPROVEMENT_SPEC.md item #6.
 	KernelPath string
 	RootfsPath string
 }
@@ -64,7 +64,7 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 
 	// MemoryDriftBytes above is a real, if coarse, observation of the
 	// guest's memory snapshots. FilesMutated and NetworkPacketsDropped
-	// are not measured — see docs/improvement_spec.md item #6 for what's
+	// are not measured — see IMPROVEMENT_SPEC.md item #6 for what's
 	// still missing (rootfs overlay diffing, network packet counters).
 	commitHash := sha256.Sum256([]byte(microvmID + pending.agentID))
 

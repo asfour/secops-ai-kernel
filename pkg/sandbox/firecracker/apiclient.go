@@ -16,7 +16,7 @@ import (
 // documented API this package needs is implemented: machine/boot-source/
 // drive configuration to boot a guest, instance start, and the pause ->
 // snapshot/create -> resume sequence used to capture guest memory for
-// diffing (see docs/improvement_spec.md item #6).
+// diffing (see IMPROVEMENT_SPEC.md item #6).
 type APIClient struct {
 	httpClient *http.Client
 }

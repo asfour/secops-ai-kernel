@@ -1,6 +1,6 @@
 # Mitigating Agent Drift: Ring-0 eBPF Fencing and Firecracker Virtualization
 
-> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [docs/improvement_spec.md](../improvement_spec.md).
+> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [IMPROVEMENT_SPEC.md](https://github.com/asfour/secops-ai-kernel/blob/main/IMPROVEMENT_SPEC.md).
 
 
 

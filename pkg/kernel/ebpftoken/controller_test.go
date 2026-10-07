@@ -10,7 +10,7 @@ import (
 // (loading pkg/kernel/ebpf/monitor.o, attaching it, and granting/revoking a
 // real token) requires a clang-compiled BPF object and CAP_BPF/CAP_SYS_ADMIN
 // to actually load it into the kernel — neither is available in the dev
-// sandbox or CI environment this was written in. See docs/improvement_spec.md
+// sandbox or CI environment this was written in. See IMPROVEMENT_SPEC.md
 // item #9.
 
 func TestLoad_MissingFileReturnsError(t *testing.T) {
