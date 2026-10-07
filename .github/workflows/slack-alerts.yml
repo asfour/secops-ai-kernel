@@ -19,5 +19,5 @@ jobs:
         with:
           webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
-          # Utilizing clean inline escaping guarantees valid JSON parsing regardless of multi-line context
-          payload: "{\"text\":\"🚨 *SecOps Kernel Stream Update*\\n*Repository:* \${{ github.repository }}\\n*Commit:* `${{ github.sha }}`\"}"
+          # Properly structured inline escaping prevents GitHub compilation failures
+          payload: '{"text":"🚨 *SecOps Kernel Stream Update*\\n*Repository:* \${{ github.repository }}\\n*Commit:* `${{ github.sha }}`"}'
