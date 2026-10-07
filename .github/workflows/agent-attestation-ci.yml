@@ -54,7 +54,37 @@ jobs:
         run: |
           # Enforce module synchronization before compilation
           go mod tidy
-          go build ./pkg/sandbox/firecracker/...
+          go build ./...
+
+      - name: "Run Test Suite with Code Coverage Monitoring"
+        run: |
+          # pkg/api/v2 is generated protobuf/gRPC code with no test files.
+          # Go 1.25's coverage machinery tries to shell out to `covdata` to
+          # synthesize a zero-coverage entry for packages with no test
+          # files, and that invocation fails ("no such tool covdata") on
+          # toolchains that only ship covdata's source, not a prebuilt
+          # binary (confirmed on both the official go1.25.0 release
+          # tarball and the GOTOOLCHAIN module-proxy distribution) — not
+          # specific to this CI image. Excluding generated code from the
+          # coverage run sidesteps the bug and is also the right policy:
+          # we don't want generated code counted against the floor below.
+          go test -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v '/pkg/api/v2$')
+
+      - name: "Assert Minimum Test Coverage Floor"
+        run: |
+          # The floor here (55%) is set just below the real, currently
+          # measured total (~59-62%, see IMPROVEMENT_SPEC.md item #9) —
+          # not the 80% an earlier, never-merged branch of this workflow
+          # hardcoded without anyone having run it against real numbers.
+          # A chunk of this codebase's logic genuinely cannot be unit
+          # tested without privileges/hardware unavailable on standard
+          # GitHub-hosted runners (CAP_BPF for loading the real eBPF
+          # object, /dev/kvm for actually booting a Firecracker guest),
+          # so 80% is not an honest target until a privileged or
+          # self-hosted runner is available to exercise those paths.
+          # Raise this number as real coverage grows; do not lower it to
+          # make a regression pass.
+          go tool cover -func=coverage.out | grep "total:" | awk '{print $3}' | sed 's/%//' | awk '{ if ($1 < 55.0) { print "❌ CRITICAL FAULT: Test coverage dropped below the 55% floor!"; exit 1 } else { print "✅ Coverage gate verified successfully." } }'
 
       - name: "Generate Cryptographic Compliance Attestation Block"
         run: |
