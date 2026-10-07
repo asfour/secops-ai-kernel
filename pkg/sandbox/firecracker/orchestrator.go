@@ -3,6 +3,7 @@ package firecracker
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -110,30 +111,47 @@ func (o *Orchestrator) SpawnIsolatedStateMirror(ctx context.Context, cfg *MicroV
 	return cfg.ID, nil
 }
 
+// MeasuredDiff is what SpawnAndMeasure observed about a guest's execution.
+// MemoryDriftBytes and FilesMutated are both real observations (see their
+// doc comments). NetworkPacketsDropped is not measured: this orchestrator
+// never configures a network interface for the guest at all, so there is
+// nothing to count yet — see IMPROVEMENT_SPEC.md item #9.
+type MeasuredDiff struct {
+	// MemoryDriftBytes is a byte-level diff between a guest memory
+	// snapshot taken just after boot and one taken partway through the
+	// execution window.
+	MemoryDriftBytes uint64
+
+	// FilesMutated counts regular files added, removed, or changed
+	// (differing inode or size) between a copy of cfg.RootfsPath taken
+	// just after boot and one taken partway through the execution
+	// window, read directly from the ext4 image via debugfs — no
+	// loopback mount or root required. See rootfsdiff.go.
+	FilesMutated uint64
+}
+
 // SpawnAndMeasure boots a Firecracker guest from cfg via SpawnIsolatedStateMirror,
-// configures it over the Firecracker REST API, and returns a real byte-level
-// memory diff between a snapshot taken just after boot and one taken partway
-// through the execution window — replacing the previous placeholder, which
-// hashed the *request* and never observed anything the guest actually did
+// configures it over the Firecracker REST API, and returns a real
+// MeasuredDiff — replacing the previous placeholder, which hashed the
+// *request* and never observed anything the guest actually did
 // (IMPROVEMENT_SPEC.md item #6).
 //
-// FilesMutated and NetworkPacketsDropped are not measured here: they would
-// require a rootfs overlay diff and a network-namespace packet counter
-// respectively, neither of which this orchestrator sets up. Callers must
-// not treat their absence as "zero changes" — only MemoryDriftBytes is a
-// real observation.
+// Both the memory and rootfs snapshots are taken while the guest is
+// paused (api.PauseVM), so no further guest writes can occur between
+// taking the "pre" snapshot and resuming — the rootfs copy is exactly as
+// consistent as the memory snapshot it's taken alongside.
 //
 // The post-execution snapshot is deliberately taken at half of
 // cfg.CPUTimeoutMs, not at the full timeout: SpawnIsolatedStateMirror's own
 // background goroutine kills the process and removes cfg.SocketPath at the
 // full timeout, which would otherwise race this method's final API calls.
-func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) (microvmID string, memoryDriftBytes uint64, err error) {
+func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) (microvmID string, diff MeasuredDiff, err error) {
 	if _, err := o.SpawnIsolatedStateMirror(ctx, cfg); err != nil {
-		return "", 0, err
+		return "", MeasuredDiff{}, err
 	}
 
 	if err := waitForSocket(ctx, cfg.SocketPath, 2*time.Second); err != nil {
-		return cfg.ID, 0, fmt.Errorf("waiting for firecracker api socket: %w", err)
+		return cfg.ID, MeasuredDiff{}, fmt.Errorf("waiting for firecracker api socket: %w", err)
 	}
 
 	api := NewAPIClient(cfg.SocketPath)
@@ -143,21 +161,22 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 	}
 
 	if err := api.ConfigureMachine(ctx, vcpuCount, cfg.MemoryLimitMB); err != nil {
-		return cfg.ID, 0, err
+		return cfg.ID, MeasuredDiff{}, err
 	}
 	if err := api.ConfigureBootSource(ctx, cfg.KernelPath, cfg.BootArgs); err != nil {
-		return cfg.ID, 0, err
+		return cfg.ID, MeasuredDiff{}, err
 	}
 	if err := api.ConfigureRootDrive(ctx, "rootfs", cfg.RootfsPath); err != nil {
-		return cfg.ID, 0, err
+		return cfg.ID, MeasuredDiff{}, err
 	}
 	if err := api.StartInstance(ctx); err != nil {
-		return cfg.ID, 0, err
+		return cfg.ID, MeasuredDiff{}, err
 	}
 
 	preMemPath := cfg.SocketPath + ".pre.mem"
-	if err := snapshotPaused(ctx, api, cfg.SocketPath+".pre.json", preMemPath); err != nil {
-		return cfg.ID, 0, err
+	preRootfsPath := cfg.SocketPath + ".pre.rootfs.img"
+	if err := snapshotPaused(ctx, api, cfg.SocketPath+".pre.json", preMemPath, cfg.RootfsPath, preRootfsPath); err != nil {
+		return cfg.ID, MeasuredDiff{}, err
 	}
 
 	select {
@@ -166,29 +185,58 @@ func (o *Orchestrator) SpawnAndMeasure(ctx context.Context, cfg *MicroVMConfig) 
 	}
 
 	postMemPath := cfg.SocketPath + ".post.mem"
-	if err := snapshotPaused(ctx, api, cfg.SocketPath+".post.json", postMemPath); err != nil {
-		return cfg.ID, 0, err
+	postRootfsPath := cfg.SocketPath + ".post.rootfs.img"
+	if err := snapshotPaused(ctx, api, cfg.SocketPath+".post.json", postMemPath, cfg.RootfsPath, postRootfsPath); err != nil {
+		return cfg.ID, MeasuredDiff{}, err
 	}
 
-	drift, err := diffFiles(preMemPath, postMemPath)
+	memDrift, err := diffFiles(preMemPath, postMemPath)
 	if err != nil {
-		return cfg.ID, 0, fmt.Errorf("diffing guest memory snapshots: %w", err)
+		return cfg.ID, MeasuredDiff{}, fmt.Errorf("diffing guest memory snapshots: %w", err)
 	}
 
-	return cfg.ID, drift, nil
+	filesMutated, err := countMutatedFiles(preRootfsPath, postRootfsPath)
+	if err != nil {
+		return cfg.ID, MeasuredDiff{}, fmt.Errorf("diffing guest rootfs snapshots: %w", err)
+	}
+
+	return cfg.ID, MeasuredDiff{MemoryDriftBytes: memDrift, FilesMutated: filesMutated}, nil
 }
 
-func snapshotPaused(ctx context.Context, api *APIClient, snapshotPath, memFilePath string) error {
+// snapshotPaused pauses the guest, takes a memory snapshot and a copy of
+// its rootfs image (both safe to do only while paused, since no further
+// guest writes can occur), then resumes.
+func snapshotPaused(ctx context.Context, api *APIClient, snapshotPath, memFilePath, rootfsPath, rootfsCopyPath string) error {
 	if err := api.PauseVM(ctx); err != nil {
 		return fmt.Errorf("pausing guest for snapshot: %w", err)
 	}
 	if err := api.CreateSnapshot(ctx, snapshotPath, memFilePath); err != nil {
 		return fmt.Errorf("creating guest snapshot: %w", err)
 	}
+	if err := copyFile(rootfsPath, rootfsCopyPath); err != nil {
+		return fmt.Errorf("copying rootfs image while paused: %w", err)
+	}
 	if err := api.ResumeVM(ctx); err != nil {
 		return fmt.Errorf("resuming guest after snapshot: %w", err)
 	}
 	return nil
+}
+
+func copyFile(srcPath, dstPath string) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 func waitForSocket(ctx context.Context, path string, timeout time.Duration) error {
