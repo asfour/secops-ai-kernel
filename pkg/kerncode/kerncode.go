@@ -6,7 +6,7 @@
 // fmt.Errorf at each call site (e.g. fmt.Errorf("0x00_LICENSING_TOKEN_EXPIRED")),
 // checked elsewhere with strings.Contains(err.Error(), "..."). A typo in
 // either the literal or the check would silently pass review and silently
-// test the wrong failure mode. See docs/improvement_spec.md item #12.
+// test the wrong failure mode. See IMPROVEMENT_SPEC.md item #12.
 //
 // A Code implements error, so existing fmt.Errorf("...: %w", kerncode.X)
 // call sites still produce a message containing the code string (so

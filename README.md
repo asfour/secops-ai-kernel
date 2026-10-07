@@ -1,10 +1,12 @@
 # SecOps Kernel v2.0-Machine Architecture & Micro-Protocol Manual
 
-> **Status: prototype.** This document describes the target design. For what
-> is actually implemented and tested today — and what still isn't — see
-> [docs/improvement_spec.md](docs/improvement_spec.md) and
-> [CLAUDE.md](CLAUDE.md). Specific guarantees below ("un-bypassable",
-> hardware-level resets, etc.) are design intent, not verified behavior.
+> **Status: early-stage, under active development.** A real gRPC server,
+> eBPF enforcement, signed BFT consensus, and Firecracker-backed state
+> diffing exist and are tested — but this document still describes target
+> design in places. For what's implemented versus still aspirational, see
+> [IMPROVEMENT_SPEC.md](IMPROVEMENT_SPEC.md) and [CLAUDE.md](CLAUDE.md).
+> Specific guarantees below ("un-bypassable", hardware-level resets, etc.)
+> are design intent, not verified behavior.
 
 SecOps Kernel is a headless, zero-human, immutable operating system layer explicitly designed to host and govern high-privilege autonomous security agents. The platform handles all actions natively via binary streaming networks, completely bypassing the text overhead of traditional legacy firewalls.
 

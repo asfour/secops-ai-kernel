@@ -9,7 +9,7 @@ import (
 // byte positions at which they differ, treating a shorter file's missing
 // tail as zero bytes. It is a coarse but real measurement — unlike a
 // placeholder hash, it actually observes the two snapshot files on disk
-// (see docs/improvement_spec.md item #6) — and avoids loading either
+// (see IMPROVEMENT_SPEC.md item #6) — and avoids loading either
 // file fully into memory, since guest memory snapshots can be large.
 func diffFiles(pathA, pathB string) (uint64, error) {
 	fA, err := os.Open(pathA)

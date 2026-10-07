@@ -30,7 +30,7 @@ type LicenseValidator struct {
 // committed directly in source alongside the open-source validation
 // algorithm — anyone who read the repo had everything needed to mint a
 // passing license, and the key could never rotate without a code change
-// and a release. See docs/improvement_spec.md item #4.
+// and a release. See IMPROVEMENT_SPEC.md item #4.
 const LicenseSecretEnvVar = "SECOPS_LICENSE_SECRET"
 
 // NewLicenseValidator builds a validator from an explicit key. Prefer

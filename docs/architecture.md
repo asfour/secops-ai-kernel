@@ -1,28 +1,73 @@
 # Core System Architecture Reference
 
-> This describes the target request lifecycle; `cmd/kernel-server` and
-> `pkg/server` implement the gRPC/invariant-check path, but real guest-state
-> diffing, the Dafny-at-request-time link, and "atomic commit to production"
-> are partially implemented or not yet wired up — see
-> [improvement_spec.md](improvement_spec.md) for specifics.
+SecOps Kernel gates an autonomous agent's proposed infrastructure actions
+behind a gRPC compiler, a set of invariant checks, and a Firecracker
+microVM replay, backstopped by an eBPF execution-token check at the
+syscall level.
 
-SecOps Kernel wraps the autonomous AI agent execution lifecycle inside an un-bypassable hardware and memory virtualization boundary.
-
-## The Verification Lifecycle
+## The Request Lifecycle
 
 ```mermaid
 graph TD
-    A[Agent Thought/Payload] --> B(gRPC Ingestion Gate)
-    B --> C{Dafny Proof Circuit}
-    C -- "0x00_ABORT" --> D[Terminate Stream]
-    C -- "0x01_PASS" --> E[Mint Ephemeral Token]
-    E --> F[Fork-and-Verify Hypervisor]
-    F --> G[Firecracker MicroVM Sandbox]
-    G --> H{eBPF System call checking}
-    H -- "Token Drift/TTL Expired" --> I[Ring-0 SIGKILL]
-    H -- "Valid State Delta" --> J[Atomic Commit to Production]
+    A[Agent / SDK client] -- "CompileZKIntent (gRPC)" --> B(ZKIntentCompiler)
+    B --> C{Structural + subnet invariant check}
+    C -- "fails" --> D[VERDICT_0x00_ABORT]
+    C -- "passes" --> E[Mint one-time simulation_token]
+    E --> F["ExecuteForkVerify (gRPC, client-streamed)"]
+    F --> G[Firecracker microVM boot + snapshot]
+    G --> H{eBPF execution-token check}
+    H -- "no live token for this PID" --> I[Ring-0 SIGKILL]
+    H -- "token present" --> J[Guest executes; pre/post memory snapshots diffed]
+    J --> K["ForkVerifyResponse: MemoryDriftBytes + commit_ready_hash"]
 ```
 
+What each stage actually does today:
+
+* **ZKIntentCompiler.CompileZKIntent** (`pkg/server/compiler.go`) runs
+  `pkg/server.CheckGraph`: first structural validation
+  (`ValidateGraphStructure` — unique node IDs, no dangling edges, no
+  cycles, `SYS_CALL_*` directive namespace, bounded payload size), then
+  the write-privilege/subnet invariant that mirrors
+  `pkg/verify/dafny/intent_rules.dfy` (`subnet ∈ [1000, 9999]` for any
+  write-privileged node). A pass mints a one-time-redeemable
+  `simulation_token`.
+* **ForkVerifyEngine.ExecuteForkVerify** (`pkg/server/forkverify.go`)
+  redeems that token and calls `Orchestrator.SpawnAndMeasure`
+  (`pkg/sandbox/firecracker`), which boots a Firecracker guest over its
+  real REST API (boot-source/drives/machine-config/actions), takes a
+  memory snapshot just after boot and another partway through the
+  execution window, and returns a real byte-level diff as
+  `MemoryDriftBytes`. `FilesMutated` and `NetworkPacketsDropped` are
+  **not** measured — they'd need a rootfs overlay diff and a
+  network-namespace packet counter, neither of which exists yet.
+* **eBPF enforcement** (`pkg/kernel/ebpf/monitor.c` +
+  `pkg/kernel/ebpftoken`): the orchestrator starts its child process
+  under `PTRACE_TRACEME` and grants it a token in `active_tokens_map`
+  during the kernel-guaranteed stop-at-exec trap, before the eBPF hook's
+  first `sys_enter_execve` check can fire. Any process without a live
+  token is `SIGKILL`'d. `kernel-server` refuses to start without a
+  working token controller unless run with `-enforce-ebpf=false`.
+* **BFT consensus** (`pkg/consensus`) is a separate component from the
+  request lifecycle above, used for high-impact actions that require
+  multi-agent agreement: proposals are keyed by a verified `AgentID`
+  (not by claimed model architecture), checked against a registered
+  ed25519 public key, and quorum requires both enough distinct signed
+  agents and enough distinct model architectures agreeing on the same
+  state-diff hash.
+
+What's still aspirational: an actual "commit to production" step (the
+gRPC path proves a hash is ready to commit; nothing applies it to real
+infrastructure), and Dafny verification at request time rather than as a
+hand-kept-in-sync Go re-implementation (`dafny verify` still only runs as
+a static CI check on `intent_rules.dfy` itself). See
+[`IMPROVEMENT_SPEC.md`](https://github.com/asfour/secops-ai-kernel/blob/main/IMPROVEMENT_SPEC.md)
+at the repository root for the full, current gap list.
+
 ## Isolation Boundary Frameworks
-* **Firecracker MicroVMs**: Every agent payload runs inside an isolated guest state mirror with a strict 512MB memory boundary and a **500ms execution timeout window**.
-* **eBPF System call hooks**: Attaches directly onto the host's `sys_enter_execve` array table, checking permission blocks dynamically at Ring 0 out-of-band.
+* **Firecracker MicroVMs**: configured per-request with a caller-supplied
+  memory limit and execution timeout; the post-execution memory snapshot
+  is taken at half of that timeout to avoid racing the orchestrator's own
+  background process-kill goroutine.
+* **eBPF System call hooks**: attach to the host's `sys_enter_execve`
+  tracepoint; a process is killed the instant it has no live, unexpired
+  entry in `active_tokens_map`.

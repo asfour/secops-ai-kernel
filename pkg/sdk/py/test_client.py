@@ -19,7 +19,7 @@ def run_networked_integration_test():
     # Connect directly to our running core engine service over the mesh network.
     # This is a manual local-integration harness run inside the docker-compose
     # mesh network (not CI), so an explicit insecure opt-in is acceptable here;
-    # see docs/improvement_spec.md item #7 for why SecOpsKernelClient otherwise
+    # see IMPROVEMENT_SPEC.md item #7 for why SecOpsKernelClient otherwise
     # requires mTLS certificates by default.
     client = SecOpsKernelClient(target_address="kernel-core:50051", insecure=True)
     

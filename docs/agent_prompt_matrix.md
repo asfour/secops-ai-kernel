@@ -14,23 +14,25 @@ Target Intent Schema Definition:
 {
   "nodes": [
     {
-      "node_id": "Unique string increment (e.g., n-0, n-1)",
-      "action_directive": "Uppercase system call identifier matching allowed security profiles (e.g., SYS_CALL_NETWORK_REDUCE, SYS_CALL_IAM_ROTATE)",
-      "target_resource_urn": "Explicit enterprise resource naming vector string (e.g., urn:secops:aws:subnet-09f123)",
-      "argument_payload_bytes": "Hex-encoded string representation of parameter values"
+      "node_id": "Unique, non-empty string per node (e.g., n-0, n-1)",
+      "action_directive": "Uppercase identifier starting with SYS_CALL_ (e.g., SYS_CALL_NETWORK_REDUCE, SYS_CALL_IAM_ROTATE)",
+      "target_resource_urn": "Must contain a purely numeric subnet-<digits> component (e.g., urn:secops:aws:subnet-4521)",
+      "argument_payload_bytes": "Hex-encoded string representation of parameter values, max 4096 bytes decoded"
     }
   ],
   "edges": []
 }
 
-Algorithmic Invariant Rules:
-1. Every write privilege node MUST target resources inside validated network blocks (e.g., target subnets between 1000 and 9999).
-2. If your proposed execution drifts by even 1 parameter from the company's zero-trust invariants, the underlying hypervisor engine will trigger an instant SIGKILL at Ring-0, destroying your runtime thread sandbox.
+Server-Enforced Invariant Rules (pkg/server.ValidateGraphStructure / CheckNode):
+1. Every write-privileged node (any action_directive not in the read-only allow-list) MUST target a subnet in [1000, 9999]. A non-numeric or out-of-range subnet aborts the whole graph.
+2. Node IDs must be unique and non-empty; edges must only reference node IDs that exist; the edge set must be acyclic.
+3. action_directive must start with SYS_CALL_; argument_payload_bytes must not exceed 4096 bytes.
+4. Any violation returns VERDICT_0x00_ABORT from CompileZKIntent before a simulation token is minted — there is no partial execution.
 ```
 
 ## Example Output Match Vector
 If an agent decides to restrict a compromised subnet, it must construct and output this clean schema payload:
 
 ```json
-{"nodes":[{"node_id":"n-0","action_directive":"SYS_CALL_NETWORK_REDUCE","target_resource_urn":"urn:secops:aws:subnet-1234","argument_payload_bytes":"010002A4"}],"edges":[]}
+{"nodes":[{"node_id":"n-0","action_directive":"SYS_CALL_NETWORK_REDUCE","target_resource_urn":"urn:secops:aws:subnet-4521","argument_payload_bytes":"010002A4"}],"edges":[]}
 ```

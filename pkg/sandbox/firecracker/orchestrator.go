@@ -56,7 +56,7 @@ func NewOrchestrator(tokens TokenGranter) *Orchestrator {
 //
 // Without this, pkg/kernel/ebpf/monitor.c's sys_enter_execve hook has no
 // record of the process and will SIGKILL it immediately (see
-// docs/improvement_spec.md item #3) — including the very firecracker
+// IMPROVEMENT_SPEC.md item #3) — including the very firecracker
 // binary this orchestrator is trying to run.
 //
 // To close the race between "process exists" and "token is granted", the
@@ -115,7 +115,7 @@ func (o *Orchestrator) SpawnIsolatedStateMirror(ctx context.Context, cfg *MicroV
 // memory diff between a snapshot taken just after boot and one taken partway
 // through the execution window — replacing the previous placeholder, which
 // hashed the *request* and never observed anything the guest actually did
-// (docs/improvement_spec.md item #6).
+// (IMPROVEMENT_SPEC.md item #6).
 //
 // FilesMutated and NetworkPacketsDropped are not measured here: they would
 // require a rootfs overlay diff and a network-namespace packet counter

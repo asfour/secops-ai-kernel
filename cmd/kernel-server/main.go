@@ -3,7 +3,7 @@
 //
 // Previously no process implemented these services at all: clients like
 // pkg/agent/remediation_worker.go dialed 127.0.0.1:50051 against nothing.
-// See docs/improvement_spec.md item #2.
+// See IMPROVEMENT_SPEC.md item #2.
 package main
 
 import (

@@ -20,11 +20,11 @@ import (
 //
 // `dafny verify` only proves that model is internally consistent; it does
 // not run against what this service actually does with an IntentGraph
-// (docs/improvement_spec.md item #5). CheckNode/CheckGraph is the runtime
+// (IMPROVEMENT_SPEC.md item #5). CheckNode/CheckGraph is the runtime
 // counterpart — it must be kept in sync with intent_rules.dfy by hand until
 // the two are generated from a single source.
 //
-// ValidateGraphStructure (docs/improvement_spec.md item #13) is a separate,
+// ValidateGraphStructure (IMPROVEMENT_SPEC.md item #13) is a separate,
 // earlier check: before any node is judged against the subnet invariant at
 // all, the graph itself must be well-formed — unique non-empty node IDs,
 // edges that reference real nodes, no cycles (an "IntentGraph" is meant to
