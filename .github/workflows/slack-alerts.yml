@@ -19,5 +19,15 @@ jobs:
         with:
           webhook: \${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: webhook-trigger
-          # Properly structured inline escaping prevents GitHub compilation failures
-          payload: '{"text":"🚨 *SecOps Kernel Stream Update*\\n*Repository:* \${{ github.repository }}\\n*Commit:* `${{ github.sha }}`"}'
+          # Using native structural configuration variables eliminates JSON string escaping bugs completely
+          payload: |
+            text: "🚨 SecOps Kernel Stream Update: \${{ github.repository }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "🛡️ *SecOps Kernel Core Execution Notification Block*\n*Repository:* \${{ github.repository }}\n*Commit:* `${{ github.sha }}`\n*Status:* *\${{ job.status }}*"
+              - type: "context"
+                elements:
+                  - type: "mrkdwn"
+                    text: "Machine-to-Machine Lifecycle Event Monitored out-of-band."
