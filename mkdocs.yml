@@ -25,3 +25,4 @@ nav:
   - Home: index.md
   - Architecture: architecture.md
   - SDK Reference: sdk.md
+  - WebAssembly Roadmap: roadmap.md
