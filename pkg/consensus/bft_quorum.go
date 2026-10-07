@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -16,10 +15,10 @@ type AgentProposal struct {
 }
 
 type ConsensusQuorum struct {
-	mu           sync.Mutex
-	Proposals    map[string]*AgentProposal
+	mu            sync.Mutex
+	Proposals     map[string]*AgentProposal
 	RequiredVotes int
-	Timeout      time.Duration
+	Timeout       time.Duration
 }
 
 func NewConsensusQuorum() *ConsensusQuorum {
@@ -42,7 +41,7 @@ func (cq *ConsensusQuorum) EvaluateProposals(ctx context.Context, incoming <-cha
 			cq.mu.Lock()
 			// Enforce structural architecture decoupling (Models must be heterogeneous)
 			cq.Proposals[prop.ModelArch] = prop
-			
+
 			// Tabulate agreement vectors
 			hashCounts := make(map[string]int)
 			var winningHash []byte

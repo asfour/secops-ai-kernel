@@ -3,6 +3,7 @@
 *.so
 *.a
 pkg/api/v2/secops_kernel.pb.go
+pkg/api/v2/secops_kernel_grpc.pb.go
 
 # Go Runtime Artifacts
 bin/

@@ -1,24 +1,34 @@
 package firecracker
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 )
 
+const testSecretKey = "test-only-secret-key-at-least-32-bytes-long"
+
+func signLicense(t *testing.T, secretKey []byte, vendor string, expiry time.Time) string {
+	t.Helper()
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write([]byte(fmt.Sprintf("%s:%s", vendor, expiry.Format(time.RFC3339))))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 func TestVerifyMachineLicense_Valid(t *testing.T) {
-	salt := "enterprise_secret_salt_2026"
 	vendor := "crewai-oem-adapter"
 	expiry := time.Now().Add(24 * time.Hour)
+	validKeySignature := signLicense(t, []byte(testSecretKey), vendor, expiry)
 
-	// Generate the expected production signature hash
-	rawPayload := fmt.Sprintf("%s:%s:%s", vendor, expiry.Format(time.RFC3339), salt)
-	expectedHash := sha256.Sum256([]byte(rawPayload))
-	validKeySignature := fmt.Sprintf("%x", expectedHash)
+	validator, err := NewLicenseValidator([]byte(testSecretKey))
+	if err != nil {
+		t.Fatalf("unexpected error constructing validator: %v", err)
+	}
 
-	validator := NewLicenseValidator(salt)
 	lic := &CommercialLicense{
 		OEMVendorID:    vendor,
 		LicenseKey:     validKeySignature,
@@ -36,14 +46,17 @@ func TestVerifyMachineLicense_Valid(t *testing.T) {
 }
 
 func TestVerifyMachineLicense_Expired(t *testing.T) {
-	salt := "enterprise_secret_salt_2026"
 	vendor := "langgraph-oem-adapter"
 	expiry := time.Now().Add(-1 * time.Hour) // Core window explicitly set in the past
 
-	validator := NewLicenseValidator(salt)
+	validator, err := NewLicenseValidator([]byte(testSecretKey))
+	if err != nil {
+		t.Fatalf("unexpected error constructing validator: %v", err)
+	}
+
 	lic := &CommercialLicense{
 		OEMVendorID:    vendor,
-		LicenseKey:     "mock_signature_hash",
+		LicenseKey:     "deadbeef",
 		ExpirationTime: expiry,
 		GracePeriodMs:  0,
 	}
@@ -58,12 +71,14 @@ func TestVerifyMachineLicense_Expired(t *testing.T) {
 }
 
 func TestVerifyMachineLicense_InvalidSignature(t *testing.T) {
-	salt := "enterprise_secret_salt_2026"
-	validator := NewLicenseValidator(salt)
-	
+	validator, err := NewLicenseValidator([]byte(testSecretKey))
+	if err != nil {
+		t.Fatalf("unexpected error constructing validator: %v", err)
+	}
+
 	lic := &CommercialLicense{
 		OEMVendorID:    "autogen-oem-adapter",
-		LicenseKey:     "invalid_fraudulent_signature_bytes",
+		LicenseKey:     "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 		ExpirationTime: time.Now().Add(10 * time.Hour),
 		GracePeriodMs:  0,
 	}
@@ -74,5 +89,23 @@ func TestVerifyMachineLicense_InvalidSignature(t *testing.T) {
 	}
 	if passed {
 		t.Fatal("Expected invalid signature result to evaluate to false, got true")
+	}
+}
+
+func TestNewLicenseValidator_RejectsShortKey(t *testing.T) {
+	if _, err := NewLicenseValidator([]byte("too-short")); err == nil {
+		t.Fatal("expected a short secret key to be rejected")
+	}
+}
+
+func TestNewLicenseValidatorFromEnv(t *testing.T) {
+	t.Setenv(LicenseSecretEnvVar, testSecretKey)
+	if _, err := NewLicenseValidatorFromEnv(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Setenv(LicenseSecretEnvVar, "")
+	if _, err := NewLicenseValidatorFromEnv(); err == nil {
+		t.Fatal("expected an unset secret env var to be rejected")
 	}
 }
