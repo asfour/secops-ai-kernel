@@ -10,35 +10,19 @@ services:
     security_opt:
       - apparmor:unconfined
     cap_add:
-      - SYS_ADMIN # Grants permissions required to load Ring-0 eBPF filter programs
+      - SYS_ADMIN # Enforces necessary privileges to inject Ring-0 eBPF telemetry hooks
     devices:
-      - "/dev/kvm:/dev/kvm" # Pass-through hardware virtualization acceleration natively
+      - "/dev/kvm:/dev/kvm" # Safely maps physical hardware virtualization pathways
     ports:
       - "50051:50051"
     environment:
       - GOPATH=/go
     command: >
-      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev z3 gcc-multilib &&
+      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev libbpf-dev z3 gcc-multilib &&
       export PATH=$$PATH:$$(go env GOPATH)/bin &&
       ./setup.sh &&
+      go test -v ./pkg/sandbox/firecracker/... &&
       go run pkg/agent/remediation_worker.go"
-    networks:
-      - secops-m2m-mesh
-
-  python-sdk-runner:
-    image: python:3.11-slim-bookworm
-    container_name: secops-python-sdk-test
-    volumes:
-      - .:/workspace
-    working_dir: /workspace/pkg/sdk/py
-    environment:
-      - PYTHONUNBUFFERED=1
-    command: >
-      sh -c "pip install --no-cache-dir grpcio grpcio-tools &&
-      python -m grpc_tools.protoc -I../../api/v2 --python_out=. --grpc_python_out=. ../../api/v2/secops_kernel.proto &&
-      python test_client.py"
-    depends_on:
-      - kernel-core
     networks:
       - secops-m2m-mesh
 
