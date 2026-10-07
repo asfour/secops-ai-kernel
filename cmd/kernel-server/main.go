@@ -8,11 +8,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"time"
 
 	pb "secops-kernel/pkg/api/v2"
+	"secops-kernel/pkg/config"
 	"secops-kernel/pkg/kernel/ebpftoken"
 	"secops-kernel/pkg/sandbox/firecracker"
 	"secops-kernel/pkg/server"
@@ -22,53 +25,79 @@ import (
 
 func main() {
 	listenAddr := flag.String("listen", "127.0.0.1:50051", "gRPC listen address")
+	configPath := flag.String("config", "configs/secops-kernel.yaml", "runtime policy config path")
 	kernelPath := flag.String("kernel-path", "/var/lib/secops-kernel/vmlinux.bin", "Firecracker guest kernel image")
 	rootfsPath := flag.String("rootfs-path", "/var/lib/secops-kernel/rootfs.ext4", "Firecracker guest rootfs image")
 	bpfObjectPath := flag.String("bpf-object", "pkg/kernel/ebpf/monitor.o", "compiled eBPF monitor object")
 	enforceEBPF := flag.Bool("enforce-ebpf", true, "require a working eBPF token controller to start (refuse to run unenforced)")
 	flag.Parse()
 
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("loading config %q: %v", *configPath, err)
+	}
+
 	lis, err := net.Listen("tcp", *listenAddr)
 	if err != nil {
 		log.Fatalf("failed to listen on %s: %v", *listenAddr, err)
 	}
 
-	// tokens is declared as the interface type (not *ebpftoken.Controller)
-	// and left at its zero value on failure. Assigning a typed-nil
-	// *ebpftoken.Controller to this interface instead would produce a
-	// non-nil interface wrapping a nil pointer — firecracker.Orchestrator's
-	// `o.Tokens != nil` check would then incorrectly report "enforcement
-	// enabled" and panic on first use.
-	var tokens firecracker.TokenGranter
-	ctrl, err := loadTokenController(*bpfObjectPath)
+	tokens, err := buildTokenGranter(*bpfObjectPath, *enforceEBPF)
 	if err != nil {
-		if *enforceEBPF {
-			log.Fatalf("eBPF token controller unavailable and -enforce-ebpf=true: %v\n"+
-				"(run with -enforce-ebpf=false only for local development without kernel enforcement)", err)
-		}
-		log.Printf("WARNING: running WITHOUT eBPF execution-token enforcement: %v", err)
-	} else {
-		if _, err := ctrl.Attach(); err != nil {
-			log.Fatalf("loaded eBPF object but failed to attach tracepoint: %v", err)
-		}
-		tokens = ctrl
+		log.Fatalf("%v", err)
+	}
+	if tokens != nil {
 		log.Printf("eBPF token enforcement active (object=%s)", *bpfObjectPath)
+	} else {
+		log.Printf("WARNING: running WITHOUT eBPF execution-token enforcement")
 	}
 
-	compiler := server.NewCompilerServer()
+	grpcServer := newGRPCServer(tokens, cfg, *kernelPath, *rootfsPath)
+
+	log.Printf("kernel-server listening on %s", *listenAddr)
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("grpc serve error: %v", err)
+	}
+}
+
+// newGRPCServer wires the compiler, orchestrator, fork-verify, and
+// telemetry services together and registers them on a fresh grpc.Server.
+// Separated from main's flag parsing and net.Listen/Serve so it can be
+// tested without binding a real socket or running forever.
+func newGRPCServer(tokens firecracker.TokenGranter, cfg *config.Config, kernelPath, rootfsPath string) *grpc.Server {
+	maxExecutionWindow := time.Duration(cfg.Engine.MaxExecutionWindowMs) * time.Millisecond
+	memoryLimitMB := cfg.Engine.MemoryFenceBytes / (1024 * 1024)
+
+	compiler := server.NewCompilerServerWithCeiling(maxExecutionWindow)
 	orchestrator := firecracker.NewOrchestrator(tokens)
-	forkVerify := server.NewForkVerifyServer(compiler, orchestrator, *kernelPath, *rootfsPath)
+	forkVerify := server.NewForkVerifyServer(compiler, orchestrator, kernelPath, rootfsPath, memoryLimitMB)
 	telemetry := server.NewTelemetryServer()
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterZKIntentCompilerServer(grpcServer, compiler)
 	pb.RegisterForkVerifyEngineServer(grpcServer, forkVerify)
 	pb.RegisterTelemetryStreamerServer(grpcServer, telemetry)
+	return grpcServer
+}
 
-	log.Printf("kernel-server listening on %s", *listenAddr)
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("grpc serve error: %v", err)
+// buildTokenGranter loads and attaches the eBPF token controller. A nil
+// *ebpftoken.Controller is deliberately never assigned to the returned
+// firecracker.TokenGranter interface value (see the comment on that
+// interface): on any failure this returns a true nil interface, or a
+// non-nil error if enforceEBPF is true.
+func buildTokenGranter(objectPath string, enforceEBPF bool) (firecracker.TokenGranter, error) {
+	ctrl, err := loadTokenController(objectPath)
+	if err != nil {
+		if enforceEBPF {
+			return nil, fmt.Errorf("eBPF token controller unavailable and -enforce-ebpf=true: %w\n"+
+				"(run with -enforce-ebpf=false only for local development without kernel enforcement)", err)
+		}
+		return nil, nil
 	}
+	if _, err := ctrl.Attach(); err != nil {
+		return nil, fmt.Errorf("loaded eBPF object but failed to attach tracepoint: %w", err)
+	}
+	return ctrl, nil
 }
 
 // loadTokenController returns a non-nil *ebpftoken.Controller only if the
