@@ -3,6 +3,7 @@ package firecracker
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
