@@ -39,7 +39,7 @@ resource "aws_instance" "secops_metal_node" {
               #!/usr/bin/env bash
               set -euo pipefail
               apt-get update -y
-              apt-get install -y git build-essential devscripts
+              apt-get install -y git build-essential devscripts libbpf-dev
               
               # Enable nested virtualization runtime permissions
               modprobe kvm_intel
