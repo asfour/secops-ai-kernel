@@ -165,3 +165,30 @@ func TestValidateGraphStructure_RejectsOversizedPayload(t *testing.T) {
 		t.Fatalf("expected kerncode.IntentGraphMalformed for an oversized payload, got: %v", err)
 	}
 }
+
+func TestPrimarySubnet_ReturnsFirstWritePrivilegedValidSubnet(t *testing.T) {
+	graph := &pb.IntentGraph{
+		Nodes: []*pb.IntentNode{
+			{NodeId: "n-0", ActionDirective: "SYS_CALL_READ_STATUS", TargetResourceUrn: "urn:secops:aws:subnet-9999"},
+			{NodeId: "n-1", ActionDirective: "SYS_CALL_NETWORK_REDUCE", TargetResourceUrn: "urn:secops:aws:subnet-4521"},
+		},
+	}
+	subnet, ok := PrimarySubnet(graph)
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if subnet != 4521 {
+		t.Fatalf("expected the write-privileged node's subnet 4521 (not the read-only node's 9999), got %d", subnet)
+	}
+}
+
+func TestPrimarySubnet_NoWritePrivilegedNodeReturnsFalse(t *testing.T) {
+	graph := &pb.IntentGraph{
+		Nodes: []*pb.IntentNode{
+			{NodeId: "n-0", ActionDirective: "SYS_CALL_READ_STATUS", TargetResourceUrn: "urn:secops:aws:subnet-4521"},
+		},
+	}
+	if _, ok := PrimarySubnet(graph); ok {
+		t.Fatal("expected ok=false when no node is write-privileged")
+	}
+}

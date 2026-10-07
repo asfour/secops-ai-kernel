@@ -41,6 +41,7 @@ func TestAPIClient_ConfiguresAndStartsGuest(t *testing.T) {
 	}
 	record("/boot-source")
 	record("/drives/rootfs")
+	record("/network-interfaces/eth0")
 	record("/machine-config")
 	record("/actions")
 	record("/vm")
@@ -59,6 +60,9 @@ func TestAPIClient_ConfiguresAndStartsGuest(t *testing.T) {
 	if err := client.ConfigureRootDrive(ctx, "rootfs", "/rootfs.ext4"); err != nil {
 		t.Fatalf("ConfigureRootDrive: %v", err)
 	}
+	if err := client.ConfigureNetworkInterface(ctx, "eth0", "tap0"); err != nil {
+		t.Fatalf("ConfigureNetworkInterface: %v", err)
+	}
 	if err := client.StartInstance(ctx); err != nil {
 		t.Fatalf("StartInstance: %v", err)
 	}
@@ -73,12 +77,13 @@ func TestAPIClient_ConfiguresAndStartsGuest(t *testing.T) {
 	}
 
 	wantMethods := map[string]string{
-		"/boot-source":     http.MethodPut,
-		"/drives/rootfs":   http.MethodPut,
-		"/machine-config":  http.MethodPut,
-		"/actions":         http.MethodPut,
-		"/vm":              http.MethodPatch,
-		"/snapshot/create": http.MethodPut,
+		"/boot-source":             http.MethodPut,
+		"/drives/rootfs":           http.MethodPut,
+		"/network-interfaces/eth0": http.MethodPut,
+		"/machine-config":          http.MethodPut,
+		"/actions":                 http.MethodPut,
+		"/vm":                      http.MethodPatch,
+		"/snapshot/create":         http.MethodPut,
 	}
 	for path, wantMethod := range wantMethods {
 		gotMethod, ok := seen[path]

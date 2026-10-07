@@ -30,6 +30,7 @@ func main() {
 	rootfsPath := flag.String("rootfs-path", "/var/lib/secops-kernel/rootfs.ext4", "Firecracker guest rootfs image")
 	bpfObjectPath := flag.String("bpf-object", "pkg/kernel/ebpf/monitor.o", "compiled eBPF monitor object")
 	enforceEBPF := flag.Bool("enforce-ebpf", true, "require a working eBPF token controller to start (refuse to run unenforced)")
+	enforceNetworkFence := flag.Bool("enforce-network-fence", true, "require working tap+nftables network fencing to start (refuse to run unenforced)")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -52,7 +53,17 @@ func main() {
 		log.Printf("WARNING: running WITHOUT eBPF execution-token enforcement")
 	}
 
-	grpcServer := newGRPCServer(tokens, cfg, *kernelPath, *rootfsPath)
+	networkFenceOK, err := checkNetworkFenceCapability(*enforceNetworkFence)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	if networkFenceOK {
+		log.Printf("network fence capability verified (tap+nftables)")
+	} else {
+		log.Printf("WARNING: running WITHOUT network-fence enforcement")
+	}
+
+	grpcServer := newGRPCServer(tokens, networkFenceOK, cfg, *kernelPath, *rootfsPath)
 
 	log.Printf("kernel-server listening on %s", *listenAddr)
 	if err := grpcServer.Serve(lis); err != nil {
@@ -64,12 +75,13 @@ func main() {
 // telemetry services together and registers them on a fresh grpc.Server.
 // Separated from main's flag parsing and net.Listen/Serve so it can be
 // tested without binding a real socket or running forever.
-func newGRPCServer(tokens firecracker.TokenGranter, cfg *config.Config, kernelPath, rootfsPath string) *grpc.Server {
+func newGRPCServer(tokens firecracker.TokenGranter, enforceNetworkFence bool, cfg *config.Config, kernelPath, rootfsPath string) *grpc.Server {
 	maxExecutionWindow := time.Duration(cfg.Engine.MaxExecutionWindowMs) * time.Millisecond
 	memoryLimitMB := cfg.Engine.MemoryFenceBytes / (1024 * 1024)
 
 	compiler := server.NewCompilerServerWithCeiling(maxExecutionWindow)
 	orchestrator := firecracker.NewOrchestrator(tokens)
+	orchestrator.EnforceNetworkFence = enforceNetworkFence
 	forkVerify := server.NewForkVerifyServer(compiler, orchestrator, kernelPath, rootfsPath, memoryLimitMB)
 	telemetry := server.NewTelemetryServer()
 
@@ -98,6 +110,22 @@ func buildTokenGranter(objectPath string, enforceEBPF bool) (firecracker.TokenGr
 		return nil, fmt.Errorf("loaded eBPF object but failed to attach tracepoint: %w", err)
 	}
 	return ctrl, nil
+}
+
+// checkNetworkFenceCapability probes whether this host can actually create
+// a tap device + nftables table (requires CAP_NET_ADMIN). The returned
+// bool is what Orchestrator.EnforceNetworkFence should be set to: true
+// means the capability was verified; false means it wasn't, which is
+// only returned (rather than an error) when enforceNetworkFence is false.
+func checkNetworkFenceCapability(enforceNetworkFence bool) (bool, error) {
+	if err := firecracker.ProbeCapability(); err != nil {
+		if enforceNetworkFence {
+			return false, fmt.Errorf("network fence capability unavailable and -enforce-network-fence=true: %w\n"+
+				"(run with -enforce-network-fence=false only for local development without network enforcement)", err)
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 // loadTokenController returns a non-nil *ebpftoken.Controller only if the

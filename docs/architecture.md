@@ -18,7 +18,7 @@ graph TD
     G --> H{eBPF execution-token check}
     H -- "no live token for this PID" --> I[Ring-0 SIGKILL]
     H -- "token present" --> J[Guest executes; pre/post memory snapshots diffed]
-    J --> K["ForkVerifyResponse: MemoryDriftBytes + commit_ready_hash"]
+    J --> K["ForkVerifyResponse: MemoryDriftBytes + FilesMutated + NetworkPacketsDropped + commit_ready_hash"]
 ```
 
 What each stage actually does today:
@@ -38,12 +38,21 @@ What each stage actually does today:
   guest is paused (so no further writes can race the copy), it takes a
   memory snapshot and a copy of the rootfs image just after boot, and
   another pair partway through the execution window, returning real
-  diffs as `MemoryDriftBytes` (byte-level) and `FilesMutated` (regular
+  diffs as `MemoryDriftBytes` (byte-level), `FilesMutated` (regular
   files added/removed/changed, read from the ext4 image directly via
   `debugfs` — no loopback mount or root required; see
-  `pkg/sandbox/firecracker/rootfsdiff.go`). `NetworkPacketsDropped` is
-  **not** measured — the orchestrator never configures a network
-  interface for the guest at all, so there's nothing to count yet.
+  `pkg/sandbox/firecracker/rootfsdiff.go`), and `NetworkPacketsDropped`
+  (see `pkg/sandbox/firecracker/network.go`): if the compiled
+  `IntentGraph` has a write-privileged node, the guest gets exactly one
+  tap device with a default-deny `nftables` policy scoped to that
+  node's already-validated subnet (mapped to a `10.<hi>.<lo>.0/24`
+  block — a new convention, since "subnet" was previously only a
+  symbolic invariant-check number, never a real network). The counter
+  on the catch-all drop rule — read before and after the execution
+  window, the same way the memory/rootfs snapshots are — *is*
+  `NetworkPacketsDropped`: a real zero-trust enforcement signal, not
+  passive telemetry. `kernel-server` refuses to start without verified
+  `CAP_NET_ADMIN` capability unless run with `-enforce-network-fence=false`.
 * **eBPF enforcement** (`pkg/kernel/ebpf/monitor.c` +
   `pkg/kernel/ebpftoken`): the orchestrator starts its child process
   under `PTRACE_TRACEME` and grants it a token in `active_tokens_map`

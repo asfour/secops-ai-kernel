@@ -76,6 +76,13 @@ func (c *APIClient) ConfigureRootDrive(ctx context.Context, driveID, pathOnHost 
 	})
 }
 
+func (c *APIClient) ConfigureNetworkInterface(ctx context.Context, ifaceID, hostDevName string) error {
+	return c.do(ctx, http.MethodPut, "/network-interfaces/"+ifaceID, map[string]interface{}{
+		"iface_id":      ifaceID,
+		"host_dev_name": hostDevName,
+	})
+}
+
 func (c *APIClient) ConfigureMachine(ctx context.Context, vcpuCount, memSizeMib int64) error {
 	return c.do(ctx, http.MethodPut, "/machine-config", map[string]interface{}{
 		"vcpu_count":   vcpuCount,
