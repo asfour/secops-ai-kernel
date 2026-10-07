@@ -2,6 +2,7 @@ package firecracker
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -14,12 +15,21 @@ import (
 
 // These tests exercise SetupNetworkFence/CountDropped/Teardown against
 // real tap devices and real nftables rules — not mocks. Creating a tap
-// device and nftables tables normally requires CAP_NET_ADMIN, which this
-// test obtains by re-executing itself inside an unprivileged user+network
-// namespace (`unshare --net --user --map-root-user`), which grants real
-// CAP_NET_ADMIN scoped entirely to that throwaway namespace. This is the
-// same technique runc/CNI test suites use to test network namespace
-// behavior without requiring the test runner itself to be root.
+// device and nftables tables normally requires CAP_NET_ADMIN, obtained one
+// of two ways depending on what the environment actually allows:
+//
+//  1. Re-exec under `unshare --net --user --map-root-user`, which grants
+//     real CAP_NET_ADMIN scoped to a throwaway namespace — the same
+//     technique runc/CNI test suites use. Preferred when available: fully
+//     isolated, needs no privilege at all.
+//  2. Re-exec under `sudo` directly (no namespace isolation) when (1)
+//     isn't available but passwordless sudo is — true on GitHub-hosted
+//     runners, which were found (see IMPROVEMENT_SPEC.md item #9) to
+//     reject the uid_map write unshare(2) needs
+//     ("unshare: write failed /proc/self/uid_map: Operation not
+//     permitted") despite allowing the unshare() call itself. Safe here
+//     because CI runners are single-use/ephemeral; a persistent dev
+//     machine without (1) just falls through to skip instead.
 //
 // Guest-sent packets are simulated by opening the tap device's character
 // device (exactly how Firecracker itself attaches to a tap) and writing
@@ -28,47 +38,76 @@ import (
 
 const netnsEnvVar = "SECOPS_INSIDE_TEST_NETNS"
 
-var netnsSupportOnce struct {
+type privilegeMode int
+
+const (
+	privilegeNone privilegeMode = iota
+	privilegeNetns
+	privilegeSudo
+)
+
+var privilegeProbeOnce struct {
 	sync.Once
-	supported   bool
-	probeOutput []byte
+	mode   privilegeMode
+	output string
+}
+
+func probePrivilegeMode() (privilegeMode, string) {
+	privilegeProbeOnce.Do(func() {
+		if _, err := exec.LookPath("unshare"); err == nil {
+			out, err := exec.Command("unshare", "--net", "--user", "--map-root-user", "true").CombinedOutput()
+			if err == nil {
+				privilegeProbeOnce.mode = privilegeNetns
+				return
+			}
+			privilegeProbeOnce.output += fmt.Sprintf("unshare probe: %s", out)
+		}
+		if err := exec.Command("sudo", "-n", "true").Run(); err == nil {
+			privilegeProbeOnce.mode = privilegeSudo
+			return
+		}
+		privilegeProbeOnce.output += "; sudo -n true also failed"
+	})
+	return privilegeProbeOnce.mode, privilegeProbeOnce.output
 }
 
 func requireNetworkNamespace(t *testing.T) {
 	t.Helper()
 	if os.Getenv(netnsEnvVar) == "1" {
-		return // already inside the unshared namespace; run normally
-	}
-
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare not found on PATH, skipping")
+		return // already inside the privileged re-exec; run normally
 	}
 	if _, err := exec.LookPath("nft"); err != nil {
 		t.Skip("nft not found on PATH, skipping")
-	}
-
-	netnsSupportOnce.Do(func() {
-		probe := exec.Command("unshare", "--net", "--user", "--map-root-user", "true")
-		out, err := probe.CombinedOutput()
-		netnsSupportOnce.probeOutput = out
-		netnsSupportOnce.supported = err == nil
-	})
-	if !netnsSupportOnce.supported {
-		t.Skipf("unprivileged user+network namespaces are not supported in this environment, skipping (probe output: %s)", netnsSupportOnce.probeOutput)
 	}
 
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatalf("os.Executable: %v", err)
 	}
+	testArgs := []string{exe, "-test.run=^" + t.Name() + "$", "-test.v"}
 
-	cmd := exec.Command("unshare", "--net", "--user", "--map-root-user", "--",
-		exe, "-test.run=^"+t.Name()+"$", "-test.v")
-	cmd.Env = append(os.Environ(), netnsEnvVar+"=1")
+	mode, probeOutput := probePrivilegeMode()
+	var cmd *exec.Cmd
+	switch mode {
+	case privilegeNetns:
+		cmd = exec.Command("unshare", append([]string{"--net", "--user", "--map-root-user", "--"}, testArgs...)...)
+	case privilegeSudo:
+		// sudo resets the environment by default; pass the marker var
+		// via `env` as part of the invoked command instead of relying
+		// on environment preservation.
+		cmd = exec.Command("sudo", append([]string{"-n", "--", "env", netnsEnvVar + "=1"}, testArgs...)...)
+	default:
+		t.Skipf("neither unprivileged user+network namespaces nor passwordless sudo are available, skipping (%s)", probeOutput)
+		return
+	}
+	if mode == privilegeNetns {
+		cmd.Env = append(os.Environ(), netnsEnvVar+"=1")
+	}
+
 	out, err := cmd.CombinedOutput()
-	t.Logf("unshare re-exec output:\n%s", out)
+	t.Logf("privileged re-exec (mode=%d) output:\n%s", mode, out)
 	if err != nil {
-		t.Fatalf("test failed inside network namespace: %v", err)
+		t.Fatalf("test failed in privileged re-exec: %v", err)
 	}
 	t.SkipNow() // the real assertions already ran and passed in the child process
 }
