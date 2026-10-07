@@ -34,6 +34,10 @@ message CompileZKIntentRequest {
   bytes auth_token_hash = 2;
   IntentGraph execution_intent_graph = 3;
   uint64 max_allowed_latency_ms = 4;
+
+  // Embedded OEM and Enterprise License Attestation Fields
+  string oem_vendor_identity = 5; // Tracks which framework (CrewAI, LangGraph) is executing
+  string commercial_license_key = 6; // Validated out-of-band by the hypervisor kernel
 }
 
 message CompileZKIntentResponse {
