@@ -50,7 +50,7 @@ services:
     environment:
       - GOPATH=/go
     command: >
-      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev libbpf-dev z3 gcc-multilib &&
+      bash -c "apt-get update && apt-get install -y protobuf-compiler clang llvm libelf-dev libbpf-dev z3 gcc-multilib e2fsprogs &&
       export PATH=$$PATH:$$(go env GOPATH)/bin &&
       ./setup.sh &&
       go test -v ./pkg/sandbox/firecracker/... &&

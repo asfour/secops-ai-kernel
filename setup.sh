@@ -16,7 +16,8 @@ sudo apt-get install -y \
     golang-go \
     curl \
     iproute2 \
-    z3
+    z3 \
+    e2fsprogs
 
 # 2. Grab and Deploy Firecracker Hypervisor MicroVM Binary
 FC_VERSION="v1.7.0"

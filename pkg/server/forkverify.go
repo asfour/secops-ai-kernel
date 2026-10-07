@@ -61,7 +61,7 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 	}
 
 	ctx := stream.Context()
-	_, memoryDriftBytes, err := s.orchestrator.SpawnAndMeasure(ctx, cfg)
+	_, diff, err := s.orchestrator.SpawnAndMeasure(ctx, cfg)
 	if err != nil {
 		return stream.Send(&pb.ForkVerifyResponse{
 			MicrovmId: microvmID,
@@ -69,16 +69,17 @@ func (s *ForkVerifyServer) ExecuteForkVerify(req *pb.ForkVerifyRequest, stream p
 		})
 	}
 
-	// MemoryDriftBytes above is a real, if coarse, observation of the
-	// guest's memory snapshots. FilesMutated and NetworkPacketsDropped
-	// are not measured — see IMPROVEMENT_SPEC.md item #6 for what's
-	// still missing (rootfs overlay diffing, network packet counters).
+	// MemoryDriftBytes and FilesMutated above are both real observations
+	// (see firecracker.MeasuredDiff). NetworkPacketsDropped is not
+	// measured — the orchestrator never configures a network interface
+	// for the guest at all. See IMPROVEMENT_SPEC.md item #9.
 	commitHash := sha256.Sum256([]byte(microvmID + pending.agentID))
 
 	return stream.Send(&pb.ForkVerifyResponse{
 		MicrovmId: microvmID,
 		DiffMetrics: &pb.StateDiffMetrics{
-			MemoryDriftBytes: memoryDriftBytes,
+			MemoryDriftBytes: diff.MemoryDriftBytes,
+			FilesMutated:     diff.FilesMutated,
 		},
 		Verdict:         pb.ExecutionVerdict_VERDICT_0x01_PASS,
 		CommitReadyHash: commitHash[:],
