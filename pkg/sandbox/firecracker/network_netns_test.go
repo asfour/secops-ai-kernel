@@ -30,7 +30,8 @@ const netnsEnvVar = "SECOPS_INSIDE_TEST_NETNS"
 
 var netnsSupportOnce struct {
 	sync.Once
-	supported bool
+	supported   bool
+	probeOutput []byte
 }
 
 func requireNetworkNamespace(t *testing.T) {
@@ -48,10 +49,12 @@ func requireNetworkNamespace(t *testing.T) {
 
 	netnsSupportOnce.Do(func() {
 		probe := exec.Command("unshare", "--net", "--user", "--map-root-user", "true")
-		netnsSupportOnce.supported = probe.Run() == nil
+		out, err := probe.CombinedOutput()
+		netnsSupportOnce.probeOutput = out
+		netnsSupportOnce.supported = err == nil
 	})
 	if !netnsSupportOnce.supported {
-		t.Skip("unprivileged user+network namespaces are not supported in this environment, skipping")
+		t.Skipf("unprivileged user+network namespaces are not supported in this environment, skipping (probe output: %s)", netnsSupportOnce.probeOutput)
 	}
 
 	exe, err := os.Executable()
