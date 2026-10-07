@@ -32,15 +32,18 @@ func main() {
 	tokenHash := sha256.Sum256([]byte(tokenString))
 
 	intentRequest := &pb.CompileZKIntentRequest{
-		AgentId:            TargetAgentUUID,
-		AuthTokenHash:      tokenHash[:],
+		AgentId:             TargetAgentUUID,
+		AuthTokenHash:       tokenHash[:],
 		MaxAllowedLatencyMs: 15,
 		ExecutionIntentGraph: &pb.IntentGraph{
 			Nodes: []*pb.IntentNode{
 				{
 					NodeId:          "node-0x01",
 					ActionDirective: "SYS_CALL_NETWORK_REDUCE",
-					TargetResourceUrn: "urn:secops:aws:subnet-09f123",
+					// Must be a purely numeric subnet in [1000, 9999] to satisfy
+					// the write-privilege invariant (pkg/verify/dafny/intent_rules.dfy,
+					// enforced at runtime in pkg/server.CheckNode).
+					TargetResourceUrn: "urn:secops:aws:subnet-4521",
 				},
 			},
 			Edges: []*pb.IntentEdge{},
@@ -48,7 +51,7 @@ func main() {
 	}
 
 	log.Printf("[Machine Stream] Dispatching Intent Matrix to ZKCompiler layer...")
-	
+
 	response, err := compilerClient.CompileZKIntent(ctx, intentRequest)
 	if err != nil {
 		log.Fatalf("Execution denied at OS Kernel layer: %v", err)
