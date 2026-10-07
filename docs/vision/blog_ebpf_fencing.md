@@ -1,5 +1,9 @@
 # Mitigating Agent Drift: Ring-0 eBPF Fencing and Firecracker Virtualization
 
+> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [docs/improvement_spec.md](../improvement_spec.md).
+
+
+
 In the autonomous enterprise ecosystem, multi-agent frameworks handle high-privilege tool execution paths across critical data planes. However, reliance on natural language inputs subjects systems to non-deterministic errors and malicious prompt injection vectors. If an LLM agent breaks an internal boundary, classic firewalls fail to catch the drift in real-time.
 
 SecOps Kernel isolates agent actions by abandoning reactive application wrappers entirely and establishing a low-level, hardware-fenced security architecture.

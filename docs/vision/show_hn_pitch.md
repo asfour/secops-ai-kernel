@@ -1,5 +1,9 @@
 # Show HN: SecOps Kernel – An Immutable OS Engine for Autonomous AI Agents
 
+> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [docs/improvement_spec.md](../improvement_spec.md).
+
+
+
 Hey HN,
 
 We are launching **SecOps Kernel**, an open-source, headless operating system layer designed to host and govern high-privilege autonomous security agents (Threat Hunters, Patching Daemons, Infrastructure Auditors).

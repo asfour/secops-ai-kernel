@@ -26,3 +26,8 @@ nav:
   - Architecture: architecture.md
   - SDK Reference: sdk.md
   - WebAssembly Roadmap: roadmap.md
+  - Improvement Spec (actual current state): improvement_spec.md
+  - Vision (aspirational, not verified):
+      - Show HN Pitch: vision/show_hn_pitch.md
+      - eBPF Fencing Blog Post: vision/blog_ebpf_fencing.md
+      - Architecture Infographic: vision/architecture_infographic.md

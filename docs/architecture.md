@@ -1,5 +1,11 @@
 # Core System Architecture Reference
 
+> This describes the target request lifecycle; `cmd/kernel-server` and
+> `pkg/server` implement the gRPC/invariant-check path, but real guest-state
+> diffing, the Dafny-at-request-time link, and "atomic commit to production"
+> are partially implemented or not yet wired up — see
+> [improvement_spec.md](improvement_spec.md) for specifics.
+
 SecOps Kernel wraps the autonomous AI agent execution lifecycle inside an un-bypassable hardware and memory virtualization boundary.
 
 ## The Verification Lifecycle

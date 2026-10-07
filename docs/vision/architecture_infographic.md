@@ -1,4 +1,8 @@
 # SecOps Kernel v2.0 Execution Blueprint
+
+> **Vision / marketing document.** Describes target behavior, not what is currently implemented or benchmarked — specific numbers below (timings, throughput) are illustrative, not measured. For the actual current state of the code, see [docs/improvement_spec.md](../improvement_spec.md).
+
+
 This diagram maps out the machine-to-machine isolation engine of the SecOps Kernel infrastructure.
 
 ```mermaid

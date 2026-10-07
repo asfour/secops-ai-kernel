@@ -1,5 +1,10 @@
 # Vulnerability Disclosure Policy (SECURITY.md)
 
+> **Status: prototype.** See [docs/improvement_spec.md](docs/improvement_spec.md)
+> for what is currently implemented versus aspirational. The disclosure
+> process below is real; specific SLA timings and encryption claims
+> elsewhere in this repo's docs should not be relied on as verified.
+
 We take the security of the **SecOps Kernel** architecture seriously. As an immutable autonomous security engine operating at the kernel layer, vulnerabilities inside this codebase could lead to hypervisor escapes or privilege drifts. 
 
 If you discover a security vulnerability, we request that you report it to us confidentially before public disclosure.
